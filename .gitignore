@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Virtual environment
+venv/
+
+# Python
+__pycache__/
+*.pyc
+.Python
+
+# OS / editor
+.DS_Store
+.vscode/
