@@ -12,3 +12,7 @@ __pycache__/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Personal / scratch
+resume.pdf
+test_*.py
