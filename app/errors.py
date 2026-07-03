@@ -8,3 +8,11 @@ class ExtractionError(NorthStarError):
 
 class AnalysisError(NorthStarError):
     """Raised when the AI analysis fails or returns bad data."""
+
+
+class SessionError(NorthStarError):
+    """Raised when session storage (Redis) fails."""
+
+
+class SessionNotFound(NorthStarError):
+    """Raised when a session ID doesn't exist or has expired."""

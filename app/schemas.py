@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, Field
 
 class ATSScore(BaseModel):
@@ -29,8 +30,8 @@ class CareerPath(BaseModel):
 class ParallelPath(BaseModel):
     title: str
     fit_reason: str
-    requirements: str
-    effort_level: str
+    requirements: list[str]                       # was: str
+    effort_level: Literal["low", "medium", "high"]  # was: str
 
 class Analysis(BaseModel):
     ats: ATSScore
@@ -38,5 +39,9 @@ class Analysis(BaseModel):
     sections: list[SectionAnalysis]        # one entry per detected section
     overall_improvements: list[str]        # cross-cutting, whole-resume fixes
     primary_path: CareerPath
-    parallel_paths: list[ParallelPath]
+    parallel_paths: list[ParallelPath] = Field(min_items=2, max_items=3)  # exactly 2-3 realistic paths
     summary: str
+
+class AnalyzeResponse(BaseModel):
+    session_id: str
+    analysis: Analysis
