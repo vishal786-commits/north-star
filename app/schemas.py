@@ -39,7 +39,7 @@ class Analysis(BaseModel):
     sections: list[SectionAnalysis]        # one entry per detected section
     overall_improvements: list[str]        # cross-cutting, whole-resume fixes
     primary_path: CareerPath
-    parallel_paths: list[ParallelPath] = Field(min_items=2, max_items=3)  # exactly 2-3 realistic paths
+    parallel_paths: list[ParallelPath] = Field(min_length=2, max_length=3)  # exactly 2-3 realistic paths
     summary: str
 
 class AnalyzeResponse(BaseModel):
