@@ -26,13 +26,6 @@ Upload a resume (PDF) and North Star returns a structured, section-aware analysi
 - **Career direction** — where your resume points, based on demonstrated evidence rather than self-branding, plus 2–3 realistic parallel paths with concrete requirements and an effort rating.
 - **Coaching chat** *(in progress)* — a follow-up conversation about your analysis, with a per-session message limit.
 
-## Screenshots
-
-<!-- Replace with your own screenshots -->
-<div align="center">
-<em>Add a screenshot of the results dashboard here (the animated score ring makes a great hero image).</em>
-</div>
-
 ## Architecture
 
 ```mermaid
