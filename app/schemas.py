@@ -45,3 +45,12 @@ class Analysis(BaseModel):
 class AnalyzeResponse(BaseModel):
     session_id: str
     analysis: Analysis
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str
+    messages_remaining: int
+    limit_reached: bool

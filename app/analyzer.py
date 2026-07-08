@@ -92,5 +92,46 @@ async def analyze_resume(resume_text:str, page_count:int) -> Analysis:
     ) from last_error
 
 
+CHAT_SYSTEM_PROMPT = """You are North Star — an expert, honest career coach chatting with a
+candidate about their resume. You have already analyzed their resume; both the full resume text
+and your structured analysis are provided below as grounding context.
+
+Answer their questions specifically and concretely, drawing on THIS resume and analysis — never
+generic advice. Keep the same evidence-based honesty as the analysis: distinguish what the resume
+claims from what it demonstrates, and don't repeat aspirational framing back as fact. Be warm,
+direct, and concise (a few sentences to a short paragraph). Plain text only — no markdown headers
+or JSON.
+
+RESUME:
+{resume_text}
+
+ANALYSIS (JSON):
+{analysis}"""
+
+
+async def chat_reply(resume_text: str, analysis: dict, history: list[dict], message: str) -> str:
+    """Answer a follow-up question, grounded in the resume + prior analysis.
+
+    Reuses the module-level AsyncOpenAI client. Plain-text (conversational) — unlike
+    analyze_resume, this does NOT request a JSON object.
+    """
+    system_prompt = CHAT_SYSTEM_PROMPT.format(
+        resume_text=resume_text,
+        analysis=json.dumps(analysis),
+    )
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + history
+        + [{"role": "user", "content": message}]
+    )
+
+    try:
+        response = await client.chat.completions.create(model=MODEL, messages=messages)
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.exception("OpenAI chat request failed")
+        raise AnalysisError("The coach is unavailable right now.") from e
+
+
 
 

@@ -1,0 +1,1520 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 L18.4 13.6 L29 16 L18.4 18.4 L16 29 L13.6 18.4 L3 16 L13.6 13.6 Z' fill='%23f5c24b'/%3E%3C/svg%3E"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta
+      name="description"
+      content="North Star — read your resume like a coach and chart where it points."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>North Star</title>
+
+    <!-- Set the theme before first paint to avoid a flash of the wrong theme. -->
+    <script>
+      (function () {
+        try {
+          var s = localStorage.getItem("ns-theme");
+          var t =
+            s === "light" || s === "dark"
+              ? s
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+
+    <style>
+      /* ============================================================
+         North Star — design system
+         Signature: a "guiding star" — gold star on a midnight sky,
+         carried through the score ring, the ambient starfield, and glow.
+         ============================================================ */
+
+      :root {
+        /* Type */
+        --font-display: "Space Grotesk", system-ui, sans-serif;
+        --font-body: "Inter", system-ui, -apple-system, sans-serif;
+
+        /* Brand accents (shared across themes) */
+        --star: #f5c24b;          /* the guiding star — gold */
+        --star-deep: #f59e0b;
+        --indigo: #6366f1;        /* the sky — cosmic indigo */
+        --violet: #8b5cf6;
+
+        /* Score bands */
+        --band-high: #34d399;     /* emerald */
+        --band-mid: #f5c24b;      /* amber */
+        --band-low: #fb7185;      /* coral */
+
+        /* Motion */
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --radius: 20px;
+        --radius-sm: 14px;
+      }
+
+      /* ---------- Light theme (daytime sky) ---------- */
+      :root,
+      [data-theme="light"] {
+        --bg-0: #eef1f8;
+        --bg-1: #f6f8fc;
+        --text-strong: #0e1428;
+        --text: #2a3350;
+        --text-muted: #6b7490;
+        --glass-bg: rgba(255, 255, 255, 0.55);
+        --glass-brd: rgba(255, 255, 255, 0.7);
+        --glass-shadow: 0 10px 40px rgba(30, 41, 82, 0.12);
+        --track: rgba(20, 30, 60, 0.1);
+        --blob-a: rgba(99, 102, 241, 0.28);
+        --blob-b: rgba(245, 194, 75, 0.3);
+        --scrim: rgba(255, 255, 255, 0.6);
+      }
+
+      /* ---------- Dark theme (night sky) ---------- */
+      [data-theme="dark"] {
+        --bg-0: #080b16;
+        --bg-1: #0e1428;
+        --text-strong: #f4f6ff;
+        --text: #c7cee6;
+        --text-muted: #8b93b2;
+        --glass-bg: rgba(255, 255, 255, 0.06);
+        --glass-brd: rgba(255, 255, 255, 0.12);
+        --glass-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+        --track: rgba(255, 255, 255, 0.1);
+        --blob-a: rgba(99, 102, 241, 0.35);
+        --blob-b: rgba(245, 194, 75, 0.22);
+        --scrim: rgba(10, 14, 30, 0.55);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font-body);
+        color: var(--text);
+        background: var(--bg-1);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        transition: background 0.5s var(--ease), color 0.5s var(--ease);
+      }
+
+      /* Ambient background: two soft gradient blobs + faint starfield */
+      .aurora {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        background: var(--bg-1);
+      }
+      .aurora::before,
+      .aurora::after {
+        content: "";
+        position: absolute;
+        width: 55vmax;
+        height: 55vmax;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.9;
+        animation: drift 26s var(--ease) infinite alternate;
+      }
+      .aurora::before {
+        background: var(--blob-a);
+        top: -18vmax;
+        left: -10vmax;
+      }
+      .aurora::after {
+        background: var(--blob-b);
+        bottom: -20vmax;
+        right: -12vmax;
+        animation-delay: -13s;
+      }
+      .starfield {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(1.5px 1.5px at 20% 30%, var(--text-muted) 50%, transparent),
+          radial-gradient(1px 1px at 70% 60%, var(--text-muted) 50%, transparent),
+          radial-gradient(1.5px 1.5px at 40% 80%, var(--text-muted) 50%, transparent),
+          radial-gradient(1px 1px at 85% 25%, var(--text-muted) 50%, transparent),
+          radial-gradient(1px 1px at 55% 15%, var(--text-muted) 50%, transparent);
+        opacity: 0.35;
+      }
+
+      @keyframes drift {
+        to {
+          transform: translate3d(6vmax, 4vmax, 0) scale(1.1);
+        }
+      }
+
+      /* ---------- Glass surface ---------- */
+      .glass {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-brd);
+        border-radius: var(--radius);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: blur(22px) saturate(160%);
+        -webkit-backdrop-filter: blur(22px) saturate(160%);
+      }
+
+      /* ---------- Layout shell ---------- */
+      .shell {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 24px 96px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1120px;
+        margin: 0 auto 28px;
+        padding: 14px 20px;
+        border-radius: var(--radius);
+      }
+      .topbar-wrap {
+        position: sticky;
+        top: 16px;
+        z-index: 20;
+        padding: 0 24px;
+        margin-bottom: 28px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.15rem;
+        letter-spacing: -0.01em;
+        color: var(--text-strong);
+      }
+
+      /* ---------- Typography helpers ---------- */
+      .display {
+        font-family: var(--font-display);
+        color: var(--text-strong);
+        letter-spacing: -0.02em;
+        line-height: 1.05;
+        margin: 0;
+      }
+      h1.display {
+        font-size: clamp(2rem, 5vw, 3rem);
+      }
+      .eyebrow {
+        font-family: var(--font-display);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+      .numeric {
+        font-family: var(--font-display);
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+      }
+
+      /* ---------- Buttons ---------- */
+      .btn {
+        font-family: var(--font-body);
+        font-weight: 600;
+        font-size: 0.95rem;
+        border: none;
+        border-radius: 999px;
+        padding: 13px 26px;
+        cursor: pointer;
+        color: #10121c;
+        background: linear-gradient(135deg, var(--star), var(--star-deep));
+        box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
+        transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease),
+          opacity 0.2s var(--ease);
+      }
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(245, 158, 11, 0.45);
+      }
+      .btn:active {
+        transform: translateY(0);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-strong);
+        border: 1px solid var(--glass-brd);
+        box-shadow: none;
+      }
+      .btn-ghost:hover {
+        box-shadow: none;
+        background: var(--glass-bg);
+      }
+
+      /* ---------- Icon button (theme toggle) ---------- */
+      .icon-btn {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text-strong);
+        cursor: pointer;
+        transition: transform 0.3s var(--ease), background 0.3s var(--ease);
+      }
+      .icon-btn:hover {
+        transform: rotate(-12deg) scale(1.05);
+      }
+
+      /* ---------- Focus visibility (a11y floor) ---------- */
+      :focus-visible {
+        outline: 2px solid var(--indigo);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+
+      /* ---------- Reveal-on-load orchestration ---------- */
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        animation: rise 0.7s var(--ease) forwards;
+      }
+      @keyframes rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ---------- Badges ---------- */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 4px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--glass-brd);
+        color: var(--text);
+        background: var(--glass-bg);
+      }
+      .badge.custom {
+        color: var(--violet);
+        border-color: color-mix(in srgb, var(--violet) 40%, transparent);
+        background: color-mix(in srgb, var(--violet) 14%, transparent);
+      }
+      .badge.effort-low {
+        color: var(--band-high);
+        border-color: color-mix(in srgb, var(--band-high) 40%, transparent);
+        background: color-mix(in srgb, var(--band-high) 14%, transparent);
+      }
+      .badge.effort-medium {
+        color: var(--band-mid);
+        border-color: color-mix(in srgb, var(--band-mid) 40%, transparent);
+        background: color-mix(in srgb, var(--band-mid) 16%, transparent);
+      }
+      .badge.effort-high {
+        color: var(--band-low);
+        border-color: color-mix(in srgb, var(--band-low) 40%, transparent);
+        background: color-mix(in srgb, var(--band-low) 16%, transparent);
+      }
+
+      /* ============================================================
+         Upload view
+         ============================================================ */
+      .upload-stage {
+        min-height: 68vh;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+      .upload-card {
+        padding: 48px 40px;
+        max-width: 560px;
+        width: 100%;
+      }
+      .dropzone {
+        margin-top: 28px;
+        border: 1.5px dashed var(--glass-brd);
+        border-radius: var(--radius);
+        padding: 40px 24px;
+        cursor: pointer;
+        transition: border-color 0.25s var(--ease), background 0.25s var(--ease),
+          transform 0.25s var(--ease);
+      }
+      .dropzone:hover,
+      .dropzone.drag {
+        border-color: var(--star);
+        background: color-mix(in srgb, var(--star) 8%, transparent);
+        transform: translateY(-2px);
+      }
+      .dropzone .file-name {
+        color: var(--text-strong);
+        font-weight: 600;
+      }
+      .err {
+        margin-top: 16px;
+        color: var(--band-low);
+        font-size: 0.9rem;
+      }
+
+      /* ============================================================
+         Results — hero score
+         ============================================================ */
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 40px;
+        align-items: center;
+        padding: 40px;
+      }
+      .hero-copy .eyebrow {
+        margin-bottom: 10px;
+      }
+      .hero-verdict {
+        font-family: var(--font-display);
+        font-size: clamp(1.3rem, 3vw, 1.9rem);
+        color: var(--text-strong);
+        margin: 6px 0 12px;
+        line-height: 1.15;
+      }
+
+      /* Circular score */
+      .ring-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+      .ring-wrap svg {
+        transform: rotate(-90deg);
+        overflow: visible;
+      }
+      .ring-track {
+        fill: none;
+        stroke: var(--track);
+      }
+      .ring-value {
+        fill: none;
+        stroke-linecap: round;
+        transition: stroke-dashoffset 1.6s var(--ease);
+        filter: drop-shadow(0 0 6px currentColor);
+      }
+      .ring-center {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+      .ring-num {
+        font-family: var(--font-display);
+        font-weight: 700;
+        color: var(--text-strong);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .ring-label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      /* Celebratory glow for high scores */
+      .hero.celebrate .ring-wrap::after {
+        content: "";
+        position: absolute;
+        inset: -10%;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--star) 0%, transparent 62%);
+        opacity: 0;
+        animation: bloom 2.4s var(--ease) 0.9s forwards;
+        z-index: -1;
+      }
+      @keyframes bloom {
+        40% {
+          opacity: 0.4;
+        }
+        100% {
+          opacity: 0.18;
+        }
+      }
+      .sparkles span {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        background: var(--star);
+        border-radius: 50%;
+        opacity: 0;
+      }
+      .hero.celebrate .sparkles span {
+        animation: spark 1.4s var(--ease) forwards;
+      }
+      .hero.celebrate .sparkles span:nth-child(1) { top: 8%; left: 50%; animation-delay: 1s; }
+      .hero.celebrate .sparkles span:nth-child(2) { top: 30%; left: 92%; animation-delay: 1.15s; }
+      .hero.celebrate .sparkles span:nth-child(3) { top: 82%; left: 78%; animation-delay: 1.3s; }
+      .hero.celebrate .sparkles span:nth-child(4) { top: 78%; left: 14%; animation-delay: 1.2s; }
+      .hero.celebrate .sparkles span:nth-child(5) { top: 22%; left: 8%; animation-delay: 1.35s; }
+      @keyframes spark {
+        0% { opacity: 0; transform: scale(0.4) translateY(0); }
+        40% { opacity: 1; transform: scale(1.3) translateY(-6px); }
+        100% { opacity: 0; transform: scale(0.6) translateY(-14px); }
+      }
+
+      /* ============================================================
+         Metric bars (ATS sub-scores)
+         ============================================================ */
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .card {
+        padding: 26px 28px;
+      }
+      .metric {
+        margin: 16px 0;
+      }
+      .metric-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+      }
+      .metric-head .val {
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: var(--text-strong);
+        font-variant-numeric: tabular-nums;
+      }
+      .bar {
+        height: 9px;
+        border-radius: 999px;
+        background: var(--track);
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        width: 0;
+        transition: width 1.3s var(--ease);
+      }
+      .notes {
+        margin: 14px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .notes li {
+        position: relative;
+        padding-left: 20px;
+        margin: 8px 0;
+        font-size: 0.9rem;
+        color: var(--text);
+      }
+      .notes li::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 8px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--star);
+      }
+
+      /* ============================================================
+         Sections grid
+         ============================================================ */
+      .two-col {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .section-card {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        transition: transform 0.28s var(--ease), box-shadow 0.28s var(--ease);
+      }
+      .section-card:hover {
+        transform: translateY(-4px);
+      }
+      .section-card .head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .mini-ring {
+        flex-shrink: 0;
+      }
+      .section-card h3 {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        color: var(--text-strong);
+        margin: 0;
+      }
+      .chip-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+      .detail h4 {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin: 0 0 6px;
+      }
+      .detail.good h4 { color: var(--band-high); }
+      .detail.bad h4 { color: var(--band-low); }
+      .detail.tip h4 { color: var(--indigo); }
+      .detail ul {
+        margin: 0 0 12px;
+        padding-left: 18px;
+      }
+      .detail li {
+        font-size: 0.88rem;
+        margin: 4px 0;
+        color: var(--text);
+      }
+
+      /* ============================================================
+         Career paths
+         ============================================================ */
+      .path-primary {
+        padding: 28px;
+      }
+      .path-grid {
+        display: grid;
+        gap: 18px;
+        margin-top: 16px;
+      }
+      .path-flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 16px;
+        align-items: stretch;
+        margin-top: 8px;
+      }
+      .flow-node {
+        padding: 18px 20px;
+        border-radius: var(--radius-sm);
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-brd);
+      }
+      .flow-node .stage {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+      }
+      .flow-node .role {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        color: var(--text-strong);
+        margin: 6px 0 8px;
+      }
+      .flow-arrow {
+        display: grid;
+        place-items: center;
+        color: var(--star);
+        font-size: 1.4rem;
+      }
+      .parallel-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .parallel-card {
+        padding: 22px;
+      }
+      .parallel-card h4 {
+        font-family: var(--font-display);
+        color: var(--text-strong);
+        font-size: 1.05rem;
+        margin: 0 0 4px;
+      }
+      .req-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .req {
+        font-size: 0.78rem;
+        padding: 5px 10px;
+        border-radius: 8px;
+        background: var(--track);
+        color: var(--text);
+      }
+
+      /* ============================================================
+         Chat panel
+         ============================================================ */
+      .chat {
+        padding: 24px 26px;
+        display: flex;
+        flex-direction: column;
+        height: 520px;
+      }
+      .chat-log {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding-right: 6px;
+        margin: 8px 0 16px;
+      }
+      .bubble {
+        max-width: 82%;
+        padding: 12px 16px;
+        border-radius: 16px;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        animation: rise 0.4s var(--ease);
+      }
+      .bubble.user {
+        align-self: flex-end;
+        background: linear-gradient(135deg, var(--indigo), var(--violet));
+        color: #fff;
+        border-bottom-right-radius: 5px;
+      }
+      .bubble.bot {
+        align-self: flex-start;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-brd);
+        color: var(--text);
+        border-bottom-left-radius: 5px;
+      }
+      .chat-input {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .chat-input input {
+        flex: 1;
+        padding: 13px 18px;
+        border-radius: 999px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text-strong);
+        font-family: var(--font-body);
+        font-size: 0.95rem;
+      }
+      .chat-input input::placeholder {
+        color: var(--text-muted);
+      }
+      .chat-input input:disabled {
+        opacity: 0.6;
+      }
+      .chat-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 0.8rem;
+      }
+      .pips {
+        display: flex;
+        gap: 5px;
+      }
+      .pip {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--track);
+        transition: background 0.3s var(--ease);
+      }
+      .pip.used {
+        background: var(--star);
+      }
+      .typing {
+        display: inline-flex;
+        gap: 4px;
+        padding: 14px 16px;
+      }
+      .typing span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        animation: blink 1.2s infinite;
+      }
+      .typing span:nth-child(2) { animation-delay: 0.2s; }
+      .typing span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes blink {
+        0%, 60%, 100% { opacity: 0.25; }
+        30% { opacity: 1; }
+      }
+
+      /* ---------- Loader ---------- */
+      .loader-stage {
+        min-height: 60vh;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+      .loader-star {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 22px;
+        animation: pulse-rot 1.8s var(--ease) infinite;
+      }
+      @keyframes pulse-rot {
+        0%, 100% { transform: scale(0.9) rotate(0deg); opacity: 0.7; }
+        50% { transform: scale(1.05) rotate(20deg); opacity: 1; }
+      }
+
+      /* ---------- Responsive ---------- */
+      @media (max-width: 860px) {
+        .two-col,
+        .parallel-grid {
+          grid-template-columns: 1fr;
+        }
+        .hero {
+          grid-template-columns: 1fr;
+          text-align: center;
+          justify-items: center;
+          gap: 24px;
+        }
+        .path-flow {
+          grid-template-columns: 1fr;
+        }
+        .flow-arrow {
+          transform: rotate(90deg);
+        }
+      }
+      @media (max-width: 520px) {
+        .shell {
+          padding: 0 16px 72px;
+        }
+        .upload-card {
+          padding: 34px 22px;
+        }
+        .card,
+        .section-card {
+          padding: 20px;
+        }
+      }
+
+      /* ---------- Reduced motion ---------- */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+        .ring-value {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="aurora"><div class="starfield"></div></div>
+
+    <div class="topbar-wrap">
+      <div class="topbar glass">
+        <div class="brand" id="brand">North Star</div>
+        <button class="icon-btn" id="theme-btn"></button>
+      </div>
+    </div>
+
+    <div id="view"></div>
+
+    <script>
+      "use strict";
+
+      /* ---------------- API layer (mirrors src/api.js) ---------------- */
+      const BASE = "/api";
+
+      async function analyzeResume(file) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`${BASE}/analyze`, { method: "POST", body: form });
+        if (!res.ok) {
+          const detail = await safeDetail(res);
+          throw new Error(detail || `Analysis failed (${res.status})`);
+        }
+        return res.json();
+      }
+
+      async function sendChat(sessionId, message) {
+        const res = await fetch(`${BASE}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message }),
+        });
+        if (!res.ok) {
+          const detail = await safeDetail(res);
+          throw new Error(detail || `Chat failed (${res.status})`);
+        }
+        return res.json();
+      }
+
+      async function safeDetail(res) {
+        try {
+          const data = await res.json();
+          return data.detail;
+        } catch {
+          return null;
+        }
+      }
+
+      /* ---------------- Tiny DOM helper ---------------- */
+      // Text children go in as text nodes, so any resume/analysis content is
+      // rendered safely (no HTML injection).
+      function el(tag, props, ...children) {
+        const node = document.createElement(tag);
+        if (props) {
+          for (const [k, v] of Object.entries(props)) {
+            if (v == null || v === false) continue;
+            if (k === "class") node.className = v;
+            else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+            else if (k.slice(0, 2) === "on" && typeof v === "function")
+              node.addEventListener(k.slice(2).toLowerCase(), v);
+            else if (v === true) node.setAttribute(k, "");
+            else node.setAttribute(k, v);
+          }
+        }
+        for (const c of children.flat()) {
+          if (c == null || c === false) continue;
+          node.appendChild(
+            typeof c === "string" || typeof c === "number"
+              ? document.createTextNode(String(c))
+              : c
+          );
+        }
+        return node;
+      }
+
+      /* ---------------- Motion helpers (mirror src/hooks.js) ---------------- */
+      const prefersReduced = () =>
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      /** Map a 0–100 score to a semantic band + its CSS color variable. */
+      function scoreBand(score) {
+        if (score >= 80) return { band: "high", color: "var(--band-high)" };
+        if (score >= 55) return { band: "mid", color: "var(--band-mid)" };
+        return { band: "low", color: "var(--band-low)" };
+      }
+
+      /** Animate a number 0 -> target once, easeOutCubic via rAF. */
+      function countUp(node, target, duration = 1500, delay = 200) {
+        if (prefersReduced()) {
+          node.textContent = target;
+          return;
+        }
+        setTimeout(() => {
+          let start = null;
+          const tick = (ts) => {
+            if (start === null) start = ts;
+            const p = Math.min((ts - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+            node.textContent = Math.round(target * eased);
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }, delay);
+      }
+
+      /* ---------------- Brand mark (mirrors StarMark) ---------------- */
+      function starMark(size = 26) {
+        const span = el("span", { style: { display: "inline-flex", lineHeight: "0" } });
+        span.innerHTML =
+          `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">` +
+          `<defs><linearGradient id="starGrad" x1="0" y1="0" x2="1" y2="1">` +
+          `<stop offset="0" stop-color="var(--star)"></stop>` +
+          `<stop offset="1" stop-color="var(--star-deep)"></stop>` +
+          `</linearGradient></defs>` +
+          `<path d="M16 3 L18.4 13.6 L29 16 L18.4 18.4 L16 29 L13.6 18.4 L3 16 L13.6 13.6 Z" fill="url(#starGrad)"></path>` +
+          `</svg>`;
+        return span;
+      }
+
+      /* ---------------- Rings & bars (mirror src/components/Primitives.jsx) ---------------- */
+      function circularScore(score, { size = 210, stroke = 16, label = "Overall", delay = 300 } = {}) {
+        const { color } = scoreBand(score);
+        const r = (size - stroke) / 2;
+        const circ = 2 * Math.PI * r;
+        const wrap = el("div", {
+          class: "ring-wrap",
+          style: { width: size + "px", height: size + "px" },
+        });
+        wrap.innerHTML =
+          `<svg width="${size}" height="${size}">` +
+          `<circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}"></circle>` +
+          `<circle class="ring-value" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}" ` +
+          `stroke="${color}" style="color:${color}" stroke-dasharray="${circ}" stroke-dashoffset="${circ}"></circle>` +
+          `</svg>` +
+          `<div class="ring-center"><div>` +
+          `<div class="ring-num" style="font-size:${size * 0.28}px">0</div>` +
+          `<div class="ring-label"></div>` +
+          `</div></div>`;
+        wrap.querySelector(".ring-label").textContent = label;
+        const valCircle = wrap.querySelector(".ring-value");
+        setTimeout(() => {
+          valCircle.style.strokeDashoffset = circ * (1 - score / 100);
+        }, delay);
+        countUp(wrap.querySelector(".ring-num"), score, 1500, delay);
+        return wrap;
+      }
+
+      function miniRing(score, { size = 54, stroke = 6 } = {}) {
+        const { color } = scoreBand(score);
+        const r = (size - stroke) / 2;
+        const circ = 2 * Math.PI * r;
+        const wrap = el("div", {
+          class: "ring-wrap mini-ring",
+          style: { width: size + "px", height: size + "px" },
+        });
+        wrap.innerHTML =
+          `<svg width="${size}" height="${size}">` +
+          `<circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}"></circle>` +
+          `<circle class="ring-value" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}" ` +
+          `stroke="${color}" style="color:${color}" stroke-dasharray="${circ}" stroke-dashoffset="${circ}"></circle>` +
+          `</svg>` +
+          `<div class="ring-center">` +
+          `<span class="numeric" style="font-size:${size * 0.32}px;color:var(--text-strong)">0</span>` +
+          `</div>`;
+        const valCircle = wrap.querySelector(".ring-value");
+        setTimeout(() => {
+          valCircle.style.strokeDashoffset = circ * (1 - score / 100);
+        }, 200);
+        countUp(wrap.querySelector(".numeric"), score, 1200, 200);
+        return wrap;
+      }
+
+      function progressBar(label, score, delay = 200) {
+        const { color } = scoreBand(score);
+        const val = el("span", { class: "val" }, "0");
+        const fill = el("div", { class: "bar-fill", style: { width: "0%", background: color } });
+        setTimeout(() => {
+          fill.style.width = score + "%";
+        }, delay);
+        countUp(val, score, 1300, delay);
+        return el(
+          "div",
+          { class: "metric" },
+          el("div", { class: "metric-head" }, el("span", null, label), val),
+          el("div", { class: "bar" }, fill)
+        );
+      }
+
+      /* ---------------- Theme (mirrors src/theme.jsx + TopBar.jsx) ---------------- */
+      const SUN_SVG =
+        `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">` +
+        `<circle cx="12" cy="12" r="4"></circle>` +
+        `<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>` +
+        `</svg>`;
+      const MOON_SVG =
+        `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>` +
+        `</svg>`;
+
+      function getInitialTheme() {
+        const saved = localStorage.getItem("ns-theme");
+        if (saved === "light" || saved === "dark") return saved;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+
+      const themeBtn = document.getElementById("theme-btn");
+      let theme = getInitialTheme();
+
+      function applyTheme() {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("ns-theme", theme);
+        themeBtn.innerHTML = theme === "dark" ? SUN_SVG : MOON_SVG;
+        themeBtn.setAttribute(
+          "aria-label",
+          `Switch to ${theme === "dark" ? "light" : "dark"} mode`
+        );
+      }
+      themeBtn.addEventListener("click", () => {
+        theme = theme === "dark" ? "light" : "dark";
+        applyTheme();
+      });
+
+      document.getElementById("brand").prepend(starMark(26));
+      applyTheme();
+
+      /* ---------------- View switching (mirrors src/App.jsx) ---------------- */
+      const viewRoot = document.getElementById("view");
+      function setView(node) {
+        viewRoot.replaceChildren(node);
+      }
+
+      /* Upload (mirrors src/components/UploadView.jsx) */
+      function makeUpload(error) {
+        let file = null;
+
+        const fileInput = el("input", { type: "file", accept: "application/pdf", hidden: true });
+        const dropText = el("p", { class: "muted" }, "Drag a PDF here, or click to browse");
+        const errEl = el("p", { class: "err", style: { display: "none" } });
+        const analyzeBtn = el("button", { class: "btn", disabled: true }, "Analyze resume");
+        const dz = el(
+          "div",
+          { class: "dropzone", role: "button", tabindex: "0" },
+          fileInput,
+          dropText
+        );
+
+        function setErr(m) {
+          errEl.textContent = m || "";
+          errEl.style.display = m ? "" : "none";
+        }
+        function pick(f) {
+          if (!f) return;
+          if (f.type !== "application/pdf") {
+            setErr("Please choose a PDF file.");
+            return;
+          }
+          setErr("");
+          file = f;
+          dropText.className = "file-name";
+          dropText.textContent = f.name;
+          analyzeBtn.disabled = false;
+        }
+
+        dz.addEventListener("click", () => fileInput.click());
+        dz.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") fileInput.click();
+        });
+        dz.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dz.classList.add("drag");
+        });
+        dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+        dz.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dz.classList.remove("drag");
+          pick(e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", (e) => pick(e.target.files && e.target.files[0]));
+        analyzeBtn.addEventListener("click", () => handleAnalyze(file));
+
+        setErr(error);
+
+        const card = el(
+          "div",
+          { class: "upload-card glass" },
+          el("div", { style: { width: "52px", height: "52px", margin: "0 auto 20px" } }, starMark(52)),
+          el("p", { class: "eyebrow" }, "AI Career Coach"),
+          el("h1", { class: "display", style: { margin: "8px 0 12px" } }, "Find out where your resume points."),
+          el(
+            "p",
+            { class: "muted" },
+            "Upload your resume and get a section-by-section read — honest scores, concrete fixes, and the career paths it opens."
+          ),
+          dz,
+          errEl,
+          el("div", { style: { marginTop: "24px" } }, analyzeBtn)
+        );
+        return el("div", { class: "shell" }, el("div", { class: "upload-stage reveal" }, card));
+      }
+
+      /* Loader (mirrors src/components/Loader.jsx) */
+      const LOADER_LINES = [
+        "Reading your resume…",
+        "Mapping every section…",
+        "Weighing evidence against claims…",
+        "Charting where it points…",
+      ];
+      let loaderTimer = null;
+      let loaderStep = 0;
+      let loaderLineEl = null;
+
+      function makeLoading() {
+        loaderStep = 0;
+        loaderLineEl = el("p", { class: "display", style: { fontSize: "1.3rem" } }, LOADER_LINES[0]);
+        const inner = el(
+          "div",
+          null,
+          el("div", { class: "loader-star" }, starMark(64)),
+          loaderLineEl,
+          el("p", { class: "muted", style: { marginTop: "8px" } }, "This takes a few seconds.")
+        );
+        return el("div", { class: "shell" }, el("div", { class: "loader-stage reveal" }, inner));
+      }
+      function startLoaderCycle() {
+        stopLoaderCycle();
+        loaderTimer = setInterval(() => {
+          loaderStep += 1;
+          if (loaderLineEl) loaderLineEl.textContent = LOADER_LINES[loaderStep % LOADER_LINES.length];
+        }, 1600);
+      }
+      function stopLoaderCycle() {
+        if (loaderTimer) {
+          clearInterval(loaderTimer);
+          loaderTimer = null;
+        }
+      }
+
+      /* Chat (mirrors src/components/ChatPanel.jsx) */
+      const MAX_PIPS = 7;
+      function makeChatPanel(sessionId) {
+        let used = 0;
+        let sending = false;
+        let locked = false;
+        let noteShown = false;
+
+        const pips = el(
+          "div",
+          { class: "pips", "aria-label": `0 of ${MAX_PIPS} messages used` },
+          Array.from({ length: MAX_PIPS }, () => el("span", { class: "pip" }))
+        );
+        const logEl = el("div", { class: "chat-log" });
+        const input = el("input", { "aria-label": "Message the coach" });
+        const button = el("button", { class: "btn" }, "Send");
+
+        const panel = el(
+          "div",
+          { class: "chat glass" },
+          el("div", { class: "chat-meta" }, el("span", { class: "eyebrow" }, "Coach chat"), pips),
+          logEl,
+          el("div", { class: "chat-input" }, input, button)
+        );
+
+        function scrollLog() {
+          logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
+        }
+        function addBubble(role, text) {
+          logEl.appendChild(el("div", { class: `bubble ${role}` }, text));
+          scrollLog();
+        }
+        function showTyping() {
+          const t = el(
+            "div",
+            { class: "bubble bot typing", "aria-label": "Coach is typing" },
+            el("span"),
+            el("span"),
+            el("span")
+          );
+          logEl.appendChild(t);
+          scrollLog();
+          return t;
+        }
+        function updatePips() {
+          Array.from(pips.children).forEach((p, i) => {
+            p.className = `pip ${i < used ? "used" : ""}`;
+          });
+          pips.setAttribute("aria-label", `${used} of ${MAX_PIPS} messages used`);
+        }
+        function updateControls() {
+          input.disabled = locked || sending;
+          input.placeholder = locked ? "Session limit reached" : "Ask about your resume…";
+          button.disabled = locked || sending || !input.value.trim();
+        }
+        function showLimitNote() {
+          if (noteShown) return;
+          noteShown = true;
+          panel.appendChild(
+            el(
+              "p",
+              { class: "muted", style: { marginTop: "10px", fontSize: "0.82rem" } },
+              "You've reached this session's message limit. Re-upload to start fresh."
+            )
+          );
+        }
+
+        async function submit() {
+          const msg = input.value.trim();
+          if (!msg || sending || locked) return;
+
+          input.value = "";
+          addBubble("user", msg);
+          sending = true;
+          updateControls();
+          const typing = showTyping();
+
+          try {
+            const res = await sendChat(sessionId, msg);
+            typing.remove();
+            addBubble("bot", res.reply);
+            used += 1;
+            updatePips();
+            if (res.limit_reached || res.messages_remaining === 0) locked = true;
+          } catch (e) {
+            typing.remove();
+            addBubble("bot", "Something went wrong reaching the coach. Try again in a moment.");
+          } finally {
+            sending = false;
+            updateControls();
+            if (locked) showLimitNote();
+          }
+        }
+
+        input.addEventListener("input", updateControls);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submit();
+        });
+        button.addEventListener("click", submit);
+
+        // Seed greeting + initial control state.
+        addBubble(
+          "bot",
+          "Ask me anything about your analysis — a section, a career path, or what to fix first."
+        );
+        updateControls();
+
+        return panel;
+      }
+
+      /* Results (mirrors src/components/ResultsView.jsx) */
+      function detailBlock(kind, title, items) {
+        return el(
+          "div",
+          { class: `detail ${kind}` },
+          el("h4", null, title),
+          el("ul", null, items.map((x) => el("li", null, x)))
+        );
+      }
+
+      function sectionCard(s) {
+        const { band } = scoreBand(s.score);
+        const effort = band === "high" ? "low" : band === "mid" ? "medium" : "high";
+
+        const chips = el("div", { class: "chip-row" });
+        if (!s.is_standard) chips.appendChild(el("span", { class: "badge custom" }, "Custom section"));
+        chips.appendChild(el("span", { class: `badge effort-${effort}` }, `${s.score} / 100`));
+
+        const card = el(
+          "div",
+          { class: "section-card glass" },
+          el(
+            "div",
+            { class: "head" },
+            miniRing(s.score),
+            el("div", null, el("h3", null, s.section_name), chips)
+          )
+        );
+        if (s.strengths.length > 0) card.appendChild(detailBlock("good", "Strengths", s.strengths));
+        if (s.issues.length > 0) card.appendChild(detailBlock("bad", "Issues", s.issues));
+        if (s.suggestions.length > 0) card.appendChild(detailBlock("tip", "Suggestions", s.suggestions));
+        return card;
+      }
+
+      function parallelCard(p) {
+        return el(
+          "div",
+          { class: "parallel-card glass" },
+          el(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+            el("h4", null, p.title),
+            el("span", { class: `badge effort-${p.effort_level}` }, `${p.effort_level} effort`)
+          ),
+          el("p", { class: "muted", style: { fontSize: "0.9rem" } }, p.fit_reason),
+          el("div", { class: "req-list" }, p.requirements.map((r) => el("span", { class: "req" }, r)))
+        );
+      }
+
+      function makeResults(data) {
+        const { analysis, session_id } = data;
+        const { ats, length, sections, overall_improvements, primary_path, parallel_paths, summary } =
+          analysis;
+        const celebrate = ats.overall >= 80;
+
+        // HERO
+        const sparkles = el(
+          "div",
+          { class: "sparkles", "aria-hidden": "true" },
+          Array.from({ length: 5 }, () => el("span"))
+        );
+        const hero = el(
+          "section",
+          { class: `hero glass reveal ${celebrate ? "celebrate" : ""}` },
+          el("div", { class: "ring-wrap" }, sparkles, circularScore(ats.overall, { label: "Resume score" })),
+          el(
+            "div",
+            { class: "hero-copy" },
+            el("p", { class: "eyebrow" }, "Your north star reading"),
+            el("p", { class: "hero-verdict" }, summary),
+            el("button", { class: "btn btn-ghost", onClick: reset }, "Analyze another resume")
+          )
+        );
+
+        // ATS + LENGTH
+        const atsCard = el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.05s" } },
+          el(
+            "div",
+            { class: "section-title" },
+            el("h2", { class: "display", style: { fontSize: "1.25rem" } }, "ATS breakdown"),
+            el("span", { class: "badge" }, `${ats.overall} / 100`)
+          ),
+          progressBar("Keyword match", ats.keyword_match, 300),
+          progressBar("Formatting", ats.formatting, 450),
+          progressBar("Quantification", ats.quantification, 600),
+          el("ul", { class: "notes" }, ats.notes.map((n) => el("li", null, n)))
+        );
+        const lengthCard = el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.1s" } },
+          el(
+            "div",
+            { class: "section-title" },
+            el("h2", { class: "display", style: { fontSize: "1.25rem" } }, "Length"),
+            el(
+              "span",
+              { class: `badge ${length.is_appropriate ? "effort-low" : "effort-high"}` },
+              `${length.page_count} page${length.page_count > 1 ? "s" : ""}`
+            )
+          ),
+          el("p", { style: { color: "var(--text)", lineHeight: "1.6" } }, length.verdict),
+          el(
+            "p",
+            { class: "muted", style: { marginTop: "12px", fontSize: "0.86rem" } },
+            length.is_appropriate
+              ? "The length is justified by the content."
+              : "Consider tightening — unjustified length dilutes impact."
+          )
+        );
+        const atsLength = el("div", { class: "grid two-col" }, atsCard, lengthCard);
+
+        // SECTIONS
+        const sectionsBlock = el(
+          "section",
+          { class: "reveal", style: { animationDelay: "0.15s" } },
+          el("h2", { class: "display", style: { fontSize: "1.4rem", margin: "16px 0 4px" } }, "Section by section"),
+          el(
+            "p",
+            { class: "muted", style: { marginBottom: "18px" } },
+            "Every section it found — including the ones you invented."
+          ),
+          el("div", { class: "grid two-col" }, sections.map(sectionCard))
+        );
+
+        // PRIMARY PATH
+        const primaryBlock = el(
+          "section",
+          { class: "path-primary glass reveal", style: { animationDelay: "0.1s" } },
+          el("h2", { class: "display", style: { fontSize: "1.4rem", marginBottom: "4px" } }, "Where this points"),
+          el("p", { class: "muted" }, "Based on demonstrated evidence, not the resume's branding."),
+          el(
+            "div",
+            { class: "path-flow" },
+            el(
+              "div",
+              { class: "flow-node" },
+              el("span", { class: "stage" }, "Now"),
+              el("p", { class: "role" }, primary_path.current_role),
+              el("p", { class: "muted", style: { fontSize: "0.88rem" } }, primary_path.current_scope)
+            ),
+            el("div", { class: "flow-arrow", "aria-hidden": "true" }, "→"),
+            el(
+              "div",
+              { class: "flow-node" },
+              el("span", { class: "stage" }, "Next"),
+              el("p", { class: "role" }, primary_path.future_scope),
+              el("p", { class: "muted", style: { fontSize: "0.88rem" } }, primary_path.timeline)
+            )
+          )
+        );
+
+        // PARALLEL PATHS
+        const parallelBlock = el(
+          "section",
+          { class: "reveal", style: { animationDelay: "0.12s" } },
+          el("h2", { class: "display", style: { fontSize: "1.4rem", margin: "16px 0 18px" } }, "Parallel paths"),
+          el("div", { class: "grid parallel-grid" }, parallel_paths.map(parallelCard))
+        );
+
+        // OVERALL IMPROVEMENTS
+        const improvementsBlock = el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.1s" } },
+          el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Fix these first"),
+          el("ul", { class: "notes" }, overall_improvements.map((imp) => el("li", null, imp)))
+        );
+
+        // CHAT
+        const chatBlock = el(
+          "section",
+          { class: "reveal", style: { animationDelay: "0.1s" } },
+          makeChatPanel(session_id)
+        );
+
+        return el(
+          "div",
+          { class: "shell" },
+          el(
+            "div",
+            { class: "grid" },
+            hero,
+            atsLength,
+            sectionsBlock,
+            primaryBlock,
+            parallelBlock,
+            improvementsBlock,
+            chatBlock
+          )
+        );
+      }
+
+      /* ---------------- App orchestration (mirrors src/App.jsx) ---------------- */
+      async function handleAnalyze(file) {
+        if (!file) return;
+        setView(makeLoading());
+        startLoaderCycle();
+        try {
+          const data = await analyzeResume(file);
+          stopLoaderCycle();
+          setView(makeResults(data));
+        } catch (e) {
+          stopLoaderCycle();
+          setView(makeUpload(e.message || "Something went wrong. Try again."));
+        }
+      }
+
+      function reset() {
+        stopLoaderCycle();
+        setView(makeUpload(""));
+      }
+
+      // Initial render.
+      setView(makeUpload(""));
+    </script>
+  </body>
+</html>

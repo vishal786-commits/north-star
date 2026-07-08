@@ -4,10 +4,10 @@ import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from app.extractor import extract_resume
-from app.analyzer import analyze_resume
-from app.session import create_session
-from app.schemas import AnalyzeResponse
-from app.errors import ExtractionError, AnalysisError, SessionError
+from app.analyzer import analyze_resume, chat_reply
+from app.session import create_session, get_session, save_session, MESSAGE_LIMIT
+from app.schemas import AnalyzeResponse, ChatRequest, ChatResponse
+from app.errors import ExtractionError, AnalysisError, SessionError, SessionNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -44,3 +44,39 @@ async def analyze(file: UploadFile = File(...)):
 
     # 6. Return the analysis plus the session id.
     return AnalyzeResponse(session_id=session_id, analysis=analysis)
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    # 1. Load the session created during /analyze.
+    try:
+        data = await get_session(req.session_id)
+    except SessionNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except SessionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    # 2. Enforce the per-session message limit.
+    if data["message_count"] >= MESSAGE_LIMIT:
+        raise HTTPException(status_code=429, detail="Message limit reached for this session.")
+
+    # 3. Ask the coach — grounded in the resume + analysis + prior turns.
+    try:
+        reply = await chat_reply(
+            data["resume_text"], data["analysis"], data["history"], req.message
+        )
+    except AnalysisError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    # 4. Record the turn and refresh the session.
+    data["history"].append({"role": "user", "content": req.message})
+    data["history"].append({"role": "assistant", "content": reply})
+    data["message_count"] += 1
+    try:
+        await save_session(req.session_id, data)
+    except SessionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    # 5. Report how many messages remain.
+    remaining = max(0, MESSAGE_LIMIT - data["message_count"])
+    return ChatResponse(reply=reply, messages_remaining=remaining, limit_reached=remaining == 0)
