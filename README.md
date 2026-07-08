@@ -6,9 +6,9 @@
 
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Redis](https://img.shields.io/badge/Redis-sessions-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-analysis-412991?logo=openai&logoColor=white)](https://openai.com/)
+[![Docker](https://img.shields.io/badge/Docker-single%20image-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
 </div>
 
@@ -24,23 +24,25 @@ Upload a resume (PDF) and North Star returns a structured, section-aware analysi
 - **Section-by-section breakdown** — the LLM identifies *every* section, including non-standard ones you invented, and scores each with specific strengths, issues, and suggestions.
 - **Length verdict** — an opinionated one-page-preferred assessment (page count is a hard fact; whether the length is *justified* is the model's judgment).
 - **Career direction** — where your resume points, based on demonstrated evidence rather than self-branding, plus 2–3 realistic parallel paths with concrete requirements and an effort rating.
-- **Coaching chat** *(in progress)* — a follow-up conversation about your analysis, with a per-session message limit.
+- **Coaching chat** — a follow-up conversation about your analysis, grounded in your resume and its scores, with a per-session message limit enforced by the server.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U[React UI<br/>glassmorphism] -->|multipart PDF| A[POST /analyze]
+    U[Single-page UI<br/>vanilla HTML/CSS/JS] -->|multipart PDF| A[POST /api/analyze]
     A -->|thread-offload| E[PyMuPDF<br/>text + page count]
     E --> L[OpenAI<br/>gpt-4o-mini]
     L -->|validated against| S[Pydantic schema]
     S --> R[(Redis<br/>session + TTL)]
     R -->|session_id + analysis| U
-    U -->|POST /chat WIP| C[Coaching chat]
+    U -->|POST /api/chat| C[Coaching chat]
     C --> R
 ```
 
-The flow: the browser uploads a PDF → FastAPI extracts text (offloaded to a thread so the blocking parse can't freeze the event loop) → OpenAI analyzes it → the response is **validated against a Pydantic schema** before anything trusts it → a session is stored in Redis → the structured analysis returns to the UI.
+The flow: the browser uploads a PDF → FastAPI extracts text (offloaded to a thread so the blocking parse can't freeze the event loop) → OpenAI analyzes it → the response is **validated against a Pydantic schema** before anything trusts it → a session is stored in Redis → the structured analysis returns to the UI. Follow-up chat messages reload that session and answer grounded in the resume + analysis.
+
+The whole thing ships as **one FastAPI service**: the API lives under `/api`, and the frontend is a single self-contained `static/index.html` served by FastAPI itself — no separate frontend server, no build step.
 
 ## Tech stack
 
@@ -48,16 +50,17 @@ The flow: the browser uploads a PDF → FastAPI extracts text (offloaded to a th
 - **FastAPI** (async) + **Uvicorn**
 - **Pydantic v2** for typed, validated data contracts; **pydantic-settings** for config
 - **PyMuPDF** for PDF text extraction
-- **OpenAI** (`gpt-4o-mini`) for analysis
-- **Redis** (async client, cloud-hosted) for session state
+- **OpenAI** (`gpt-4o-mini`) for analysis and chat
+- **Redis** (async client) for session state
 
 **Frontend**
-- **React 18** + **Vite**
-- Handwritten CSS design system — glassmorphism, light/dark themes, responsive
-- Animations (count-up, ring fills, reveals) built with a small rAF hook + CSS — **no animation library**, ~51 KB gzipped
+- A single **vanilla HTML/CSS/JS** file (`static/index.html`) — **no framework, no build step, no npm**
+- Handwritten CSS design system — glassmorphism, light/dark themes, responsive, `prefers-reduced-motion` aware
+- Animations (count-up, ring fills, reveals) built with `requestAnimationFrame` + CSS — no animation library
+- Served directly by FastAPI via `StaticFiles`
 
 **Infra**
-- **Docker** (multi-stage build, nginx serving static + proxying the API)
+- **Docker** — a single `python:3.13-slim` image running Uvicorn (no Node stage, no nginx)
 - **AWS ECS Fargate** target *(deployment in progress)*
 
 ## Engineering decisions worth calling out
@@ -69,15 +72,16 @@ A few choices that reflect how the system is built, not just what it does:
 - **Custom exception hierarchy mapped to HTTP semantics.** `ExtractionError`, `AnalysisError`, and `SessionError` translate into meaningful status codes (422 / 502 / 503) so failures are precise instead of generic 500s.
 - **Evidence-critical prompting.** The model is explicitly instructed to distinguish what a resume *claims* from what it *demonstrates*, and to surface the gap — which is what makes it a coach rather than a mirror.
 - **The server owns the session limit.** The chat message cap lives in the backend; the frontend reflects whatever the server enforces, so the two can never disagree.
+- **One deployable, no build pipeline.** Collapsing the UI into a single static file served by the API means one container, one process, and no Node toolchain to ship or secure.
 
 ## Getting started
 
 ### Prerequisites
-- Python 3.13, Node 20+
+- Python 3.13
 - An OpenAI API key
 - A Redis instance (local via Docker, or a free Redis Cloud database)
 
-### Backend
+### Run it locally
 
 ```bash
 # from the project root
@@ -101,37 +105,48 @@ Run it:
 uvicorn app.main:app --reload
 ```
 
-Interactive API docs at `http://127.0.0.1:8000/docs`.
+- App (UI): `http://127.0.0.1:8000/`
+- Interactive API docs: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
-### Frontend
+### Run with Docker
 
 ```bash
-cd north-star-frontend
-npm install
-npm run dev
+docker build -t north-star .
+docker run -p 8000:8000 --env-file .env north-star
 ```
 
-Opens at `http://localhost:5173`. The dev server proxies `/api/*` to the backend, so no CORS setup is needed locally. To preview the UI on mock data without a running backend, set `USE_MOCK = true` in `src/api.js`.
+Then open `http://127.0.0.1:8000/`.
+
+## API reference
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `POST /api/analyze` | multipart form, field `file` (PDF) | `{ session_id, analysis }` |
+| `POST /api/chat` | JSON `{ session_id, message }` | `{ reply, messages_remaining, limit_reached }` |
+| `GET /health` | — | `{ "status": "ok" }` |
+
+**Notes**
+- Sessions are stored in Redis and expire after **1 hour** of inactivity.
+- The coaching chat is capped at **5 messages per session**; the 6th request returns `429`.
+- `analysis` contains: `ats`, `length`, `sections[]`, `overall_improvements[]`, `primary_path`, `parallel_paths[]`, and a `summary`.
 
 ## Project structure
 
 ```
 north-star/
 ├── app/                     # FastAPI backend
-│   ├── main.py              # app + router wiring
+│   ├── main.py              # app wiring: /api router + static mount
 │   ├── config.py            # typed settings from .env
 │   ├── schemas.py           # Pydantic data contracts
 │   ├── extractor.py         # PDF → text + page count
-│   ├── analyzer.py          # OpenAI call + schema validation
-│   ├── session.py           # Redis session layer
-│   ├── routes.py            # /analyze endpoint
+│   ├── analyzer.py          # OpenAI analysis + chat, schema validation
+│   ├── session.py           # Redis session layer + message limit
+│   ├── routes.py            # /api/analyze and /api/chat
 │   └── errors.py            # custom exception types
-├── north-star-frontend/     # React + Vite frontend
-│   └── src/
-│       ├── components/      # UI components
-│       ├── api.js           # single backend integration seam
-│       ├── theme.jsx        # light/dark context
-│       └── hooks.js         # count-up + score helpers
+├── static/
+│   └── index.html           # entire self-contained frontend
+├── Dockerfile               # single-image build
 └── requirements.txt
 ```
 
@@ -140,9 +155,10 @@ north-star/
 North Star is **actively in development** — built in public.
 
 - [x] Async backend: PDF extraction, OpenAI analysis, schema validation, Redis sessions
-- [x] `/analyze` endpoint — working end to end
-- [x] React frontend — glassmorphism UI, light/dark, animated scoring
-- [ ] `/chat` endpoint — coaching conversation *(next)*
+- [x] `/api/analyze` endpoint — working end to end
+- [x] `/api/chat` endpoint — coaching conversation with per-session limit
+- [x] Frontend — glassmorphism UI, light/dark, animated scoring (single-file, no build)
+- [x] Single-container Docker image
 - [ ] AWS ECS Fargate deployment
 - [ ] Live demo
 
