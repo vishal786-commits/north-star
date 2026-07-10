@@ -1,12 +1,12 @@
 import json
 import logging
+import time
 
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 from pydantic import ValidationError
-# from pymupdf.extra import page_count
 
 from app.config import settings
-from app.schemas import Analysis
+from app.schemas import Analysis, FitAnalysis
 from app.errors import AnalysisError
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,23 @@ client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=45)
 
 MODEL = "gpt-4o-mini"
 MAX_RETRIES = 1
+
+
+def _meta(response, llm_ms: float) -> dict:
+    """Pull the monitoring metadata off an OpenAI response.
+
+    Token usage was previously discarded — capturing it here is what lets the
+    metrics layer track cost and latency per request.
+    """
+    usage = getattr(response, "usage", None)
+    return {
+        "model": MODEL,
+        "prompt_tokens": getattr(usage, "prompt_tokens", None),
+        "completion_tokens": getattr(usage, "completion_tokens", None),
+        "total_tokens": getattr(usage, "total_tokens", None),
+        "llm_ms": round(llm_ms, 1),
+    }
+
 
 SYSTEM_PROMPT = """You are an expert, honest career coach and resume analyst.
 
@@ -47,20 +64,23 @@ justified by senior experience or genuinely dense, relevant content.
 Be concrete, realistic, and honest. Avoid generic filler. Base everything
 strictly on the actual resume content."""
 
-async def analyze_resume(resume_text:str, page_count:int) -> Analysis:
+async def analyze_resume(resume_text: str, page_count: int) -> tuple[Analysis, dict]:
+    """Analyze a resume. Returns (analysis, meta) where meta carries token
+    usage + latency for the monitoring layer."""
     schema = json.dumps(Analysis.model_json_schema(), indent=2)
 
     user_prompt = f"""Analyze the resume below and strictly return only a JSON object that matches the
     schema provided. Do not include any markdown or commentary.
     Schema:{schema}
     The resume has {page_count} page(s) — use this for your length assessment.
-    
+
     Resume:{resume_text}"""
 
     last_error: Exception | None = None
 
     for attempt in range(MAX_RETRIES + 1):
         try:
+            started = time.perf_counter()
             response = await client.chat.completions.create(
                 model=MODEL,
                 response_format={"type": "json_object"},
@@ -69,8 +89,9 @@ async def analyze_resume(resume_text:str, page_count:int) -> Analysis:
                     {"role": "user", "content": user_prompt},
                 ],
             )
+            llm_ms = (time.perf_counter() - started) * 1000
             raw = response.choices[0].message.content
-            return Analysis.model_validate_json(raw)
+            return Analysis.model_validate_json(raw), _meta(response, llm_ms)
 
         except ValidationError as e:
             # The model returned JSON, but not OUR shape. Worth a retry.
@@ -87,6 +108,71 @@ async def analyze_resume(resume_text:str, page_count:int) -> Analysis:
             raise AnalysisError("The analysis service is unavailable.") from e
 
     # Exhausted retries on validation failures.
+    raise AnalysisError(
+        "The AI returned malformed data after retrying."
+    ) from last_error
+
+
+FIT_SYSTEM_PROMPT = """You are an expert, honest career coach assessing how well a candidate's
+resume fits a SPECIFIC job. You are given the full resume text and a job description.
+
+CRITICAL — assess EVIDENCE, not keyword surface or self-description. A resume is a marketing
+document; a job description is a wish list. Compare what the resume actually DEMONSTRATES
+(shipped work, measurable outcomes, real scope, tenure) against what the job GENUINELY requires.
+
+- match_score reflects real, demonstrated fit for THIS role — not how many keywords overlap.
+- matched_requirements: job needs the resume genuinely supports with evidence.
+- missing_requirements: job needs the resume does NOT demonstrate (be honest, don't pad).
+- gaps: concrete, closeable gaps between the candidate and the role.
+- tailoring_suggestions: specific ways to tailor THIS resume for THIS job (reframing real
+  experience, surfacing buried evidence, quantifying) — never fabricate experience.
+
+Be concrete, realistic, and honest. Avoid generic filler. Base everything strictly on the
+actual resume and job description."""
+
+async def analyze_fit(resume_text: str, page_count: int, job_description: str) -> tuple[FitAnalysis, dict]:
+    """Assess resume-to-job fit. Returns (fit, meta)."""
+    schema = json.dumps(FitAnalysis.model_json_schema(), indent=2)
+
+    user_prompt = f"""Assess how well the resume fits the job below. Strictly return only a JSON
+    object that matches the schema provided. Do not include any markdown or commentary.
+    Schema:{schema}
+
+    JOB DESCRIPTION:
+    {job_description}
+
+    RESUME ({page_count} page(s)):
+    {resume_text}"""
+
+    last_error: Exception | None = None
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            started = time.perf_counter()
+            response = await client.chat.completions.create(
+                model=MODEL,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": FIT_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            llm_ms = (time.perf_counter() - started) * 1000
+            raw = response.choices[0].message.content
+            return FitAnalysis.model_validate_json(raw), _meta(response, llm_ms)
+
+        except ValidationError as e:
+            last_error = e
+            logger.warning(
+                "Fit output failed schema validation (attempt %d/%d): %s",
+                attempt + 1, MAX_RETRIES + 1, e,
+            )
+            continue
+
+        except Exception as e:
+            logger.exception("OpenAI fit request failed")
+            raise AnalysisError("The analysis service is unavailable.") from e
+
     raise AnalysisError(
         "The AI returned malformed data after retrying."
     ) from last_error
@@ -109,11 +195,11 @@ ANALYSIS (JSON):
 {analysis}"""
 
 
-async def chat_reply(resume_text: str, analysis: dict, history: list[dict], message: str) -> str:
+async def chat_reply(resume_text: str, analysis: dict, history: list[dict], message: str) -> tuple[str, dict]:
     """Answer a follow-up question, grounded in the resume + prior analysis.
 
     Reuses the module-level AsyncOpenAI client. Plain-text (conversational) — unlike
-    analyze_resume, this does NOT request a JSON object.
+    analyze_resume, this does NOT request a JSON object. Returns (reply, meta).
     """
     system_prompt = CHAT_SYSTEM_PROMPT.format(
         resume_text=resume_text,
@@ -126,12 +212,10 @@ async def chat_reply(resume_text: str, analysis: dict, history: list[dict], mess
     )
 
     try:
+        started = time.perf_counter()
         response = await client.chat.completions.create(model=MODEL, messages=messages)
-        return response.choices[0].message.content
+        llm_ms = (time.perf_counter() - started) * 1000
+        return response.choices[0].message.content, _meta(response, llm_ms)
     except Exception as e:
         logger.exception("OpenAI chat request failed")
         raise AnalysisError("The coach is unavailable right now.") from e
-
-
-
-

@@ -6,7 +6,6 @@ import redis.asyncio as redis
 
 from app.config import settings
 from app.errors import SessionError, SessionNotFound
-from app.schemas import Analysis
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +17,15 @@ MESSAGE_LIMIT = 5 # limit the number of messages stored in a session to avoid ex
 def _key(session_id: str) -> str:
     return f"session:{session_id}"
 
-async def create_session(resume_text: str, analysis: Analysis) -> str:
+async def create_session(resume_text: str, analysis, kind: str = "review") -> str:
     #store a new session in Redis with a unique session ID
+    # `analysis` is a pydantic model (Analysis for review, FitAnalysis for fit);
+    # its dump grounds the coach chat, which works for both flows.
     session_id = uuid.uuid4().hex
     data = {
         "resume_text": resume_text,
         "analysis": analysis.model_dump(),
+        "kind": kind,
         "message_count": 0,
         "history": [],
     }

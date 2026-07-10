@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>North Star — Monitoring</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 L18.4 13.6 L29 16 L18.4 18.4 L16 29 L13.6 18.4 L3 16 L13.6 13.6 Z' fill='%23f5c24b'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --bg: #0b1020;
+        --surface: #141a2e;
+        --brd: rgba(255, 255, 255, 0.09);
+        --text: #e6e9f2;
+        --muted: #9aa3bd;
+        --strong: #f4f6fb;
+        --star: #f5c24b;
+        --high: #34d399;
+        --mid: #f5c24b;
+        --low: #f87171;
+        --indigo: #818cf8;
+        --font: "Inter", system-ui, -apple-system, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 600px at 50% -10%, #16203c 0%, var(--bg) 55%);
+        color: var(--text);
+        font-family: var(--font);
+        min-height: 100vh;
+        padding: 40px 24px 80px;
+      }
+      .wrap { max-width: 1080px; margin: 0 auto; }
+      header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+      header svg { width: 30px; height: 30px; }
+      h1 { font-size: 1.4rem; margin: 0; color: var(--strong); letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 28px; }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--brd);
+        border-radius: 18px;
+        padding: 22px;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 14px;
+        margin-bottom: 22px;
+      }
+      .tile .label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+      }
+      .tile .value {
+        font-size: 1.7rem;
+        font-weight: 700;
+        color: var(--strong);
+        margin-top: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tile .unit { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin-left: 3px; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+      @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+      h2 { font-size: 1rem; margin: 0 0 16px; color: var(--strong); }
+      .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+      .bar-label { width: 120px; flex-shrink: 0; font-size: 0.85rem; color: var(--text); }
+      .bar-track { flex: 1; height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+      .bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+      .bar-val { width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--muted); }
+      .comment { border-top: 1px solid var(--brd); padding: 10px 0; font-size: 0.88rem; }
+      .comment .rating { font-weight: 700; margin-right: 8px; }
+      .kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--brd); font-size: 0.9rem; }
+      .kv:last-child { border-bottom: none; }
+      .kv .k { color: var(--muted); }
+      .kv .v { color: var(--strong); font-variant-numeric: tabular-nums; }
+      .gate { max-width: 420px; margin: 60px auto; text-align: center; }
+      .gate input {
+        width: 100%; padding: 12px 14px; margin: 14px 0; border-radius: 12px;
+        border: 1px solid var(--brd); background: var(--surface); color: var(--text); font-size: 0.95rem;
+      }
+      .gate button {
+        padding: 11px 24px; border-radius: 999px; border: none; cursor: pointer;
+        background: linear-gradient(135deg, #f5c24b, #f59e0b); color: #10121c; font-weight: 600;
+      }
+      .err { color: var(--low); font-size: 0.9rem; min-height: 1.2em; }
+      .muted { color: var(--muted); }
+      .empty { color: var(--muted); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <svg viewBox="0 0 32 32"><path d="M16 3 L18.4 13.6 L29 16 L18.4 18.4 L16 29 L13.6 18.4 L3 16 L13.6 13.6 Z" fill="#f5c24b"/></svg>
+        <h1>North Star — Monitoring</h1>
+      </header>
+      <p class="sub">Per-request latency, tokens, scores, errors, and user feedback.</p>
+      <div id="root"></div>
+    </div>
+
+    <script>
+      "use strict";
+      const $ = (sel) => document.querySelector(sel);
+      const root = $("#root");
+
+      function el(tag, props, ...kids) {
+        const n = document.createElement(tag);
+        if (props) for (const [k, v] of Object.entries(props)) {
+          if (v == null || v === false) continue;
+          if (k === "class") n.className = v;
+          else if (k === "style" && typeof v === "object") Object.assign(n.style, v);
+          else n.setAttribute(k, v);
+        }
+        for (const c of kids.flat()) {
+          if (c == null || c === false) continue;
+          n.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+        }
+        return n;
+      }
+
+      const TOKEN_KEY = "ns-admin-token";
+      const fmt = (v, dash = "—") => (v == null ? dash : v);
+
+      function tile(label, value, unit) {
+        return el("div", { class: "card tile" },
+          el("div", { class: "label" }, label),
+          el("div", { class: "value" }, fmt(value), unit ? el("span", { class: "unit" }, unit) : null)
+        );
+      }
+
+      function bar(label, value, max, color) {
+        const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+        return el("div", { class: "bar-row" },
+          el("div", { class: "bar-label" }, label),
+          el("div", { class: "bar-track" }, el("div", { class: "bar-fill", style: { width: pct + "%", background: color } })),
+          el("div", { class: "bar-val" }, value)
+        );
+      }
+
+      function render(m) {
+        root.replaceChildren();
+
+        const t = m.totals, lat = m.latency_ms, tok = m.tokens, fb = m.feedback;
+
+        // Stat tiles
+        root.appendChild(el("div", { class: "tiles" },
+          tile("Total requests", t.events),
+          tile("Error rate", (t.error_rate * 100).toFixed(1), "%"),
+          tile("Latency p50", lat.total_p50, "ms"),
+          tile("Latency p95", lat.total_p95, "ms"),
+          tile("LLM p50", lat.llm_p50, "ms"),
+          tile("Avg tokens", tok.avg_per_event),
+          tile("Est. cost", "$" + tok.est_cost_usd),
+          tile("👍 rate", fb.positive_rate == null ? "—" : (fb.positive_rate * 100).toFixed(0) + "%")
+        ));
+
+        // By kind + score distribution
+        const kinds = t.by_kind || {};
+        const kindMax = Math.max(1, ...Object.values(kinds));
+        const byKind = el("div", { class: "card" },
+          el("h2", null, "Requests by type"),
+          Object.keys(kinds).length
+            ? Object.entries(kinds).map(([k, v]) =>
+                bar(k, v, kindMax, k === "review" ? "var(--indigo)" : k === "fit" ? "var(--star)" : "var(--high)"))
+            : el("p", { class: "empty" }, "No requests yet.")
+        );
+
+        const dist = m.score_distribution || {};
+        const distMax = Math.max(1, ...Object.values(dist));
+        const colorFor = (label) => label.startsWith("high") ? "var(--high)" : label.startsWith("mid") ? "var(--mid)" : "var(--low)";
+        const scores = el("div", { class: "card" },
+          el("h2", null, "Score distribution"),
+          Object.values(dist).some((v) => v > 0)
+            ? Object.entries(dist).map(([k, v]) => bar(k, v, distMax, colorFor(k)))
+            : el("p", { class: "empty" }, "No scored results yet.")
+        );
+
+        root.appendChild(el("div", { class: "grid2" }, byKind, scores));
+
+        // Tokens + feedback
+        const tokens = el("div", { class: "card" },
+          el("h2", null, "Token usage"),
+          el("div", { class: "kv" }, el("span", { class: "k" }, "Prompt tokens"), el("span", { class: "v" }, tok.prompt.toLocaleString())),
+          el("div", { class: "kv" }, el("span", { class: "k" }, "Completion tokens"), el("span", { class: "v" }, tok.completion.toLocaleString())),
+          el("div", { class: "kv" }, el("span", { class: "k" }, "Total tokens"), el("span", { class: "v" }, tok.total.toLocaleString())),
+          el("div", { class: "kv" }, el("span", { class: "k" }, "Estimated cost"), el("span", { class: "v" }, "$" + tok.est_cost_usd))
+        );
+
+        const fbMax = Math.max(1, fb.up, fb.down);
+        const feedback = el("div", { class: "card" },
+          el("h2", null, "Feedback"),
+          fb.total
+            ? [bar("👍 Helpful", fb.up, fbMax, "var(--high)"), bar("👎 Not helpful", fb.down, fbMax, "var(--low)")]
+            : el("p", { class: "empty" }, "No feedback yet."),
+          (fb.recent_comments || []).length
+            ? el("div", { style: { marginTop: "14px" } },
+                el("h2", { style: { fontSize: "0.85rem" } }, "Recent comments"),
+                fb.recent_comments.map((c) =>
+                  el("div", { class: "comment" }, el("span", { class: "rating" }, c.rating === "up" ? "👍" : "👎"), c.comment)))
+            : null
+        );
+
+        root.appendChild(el("div", { class: "grid2" }, tokens, feedback));
+      }
+
+      function showGate(message) {
+        root.replaceChildren();
+        const input = el("input", { type: "password", placeholder: "Admin token", value: localStorage.getItem(TOKEN_KEY) || "" });
+        const err = el("p", { class: "err" }, message || "");
+        const btn = el("button", null, "View dashboard");
+        btn.addEventListener("click", () => {
+          localStorage.setItem(TOKEN_KEY, input.value.trim());
+          load();
+        });
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") btn.click(); });
+        root.appendChild(el("div", { class: "gate card" },
+          el("h2", null, "Admin access"),
+          el("p", { class: "muted", style: { fontSize: "0.88rem" } }, "This dashboard is protected by the admin token."),
+          input, err, btn
+        ));
+      }
+
+      async function load() {
+        const token = localStorage.getItem(TOKEN_KEY) || "";
+        try {
+          const res = await fetch(`/api/metrics${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+          if (res.status === 401) { showGate("Invalid token — try again."); return; }
+          if (!res.ok) { showGate(`Failed to load (${res.status}).`); return; }
+          render(await res.json());
+        } catch (e) {
+          showGate("Network error loading metrics.");
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

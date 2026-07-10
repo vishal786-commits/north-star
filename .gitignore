@@ -13,6 +13,10 @@ __pycache__/
 .DS_Store
 .vscode/
 
+# Metrics store (SQLite)
+data/
+*.db
+
 # Personal / scratch
 resume.pdf
 test_*.py

@@ -78,9 +78,11 @@
         --glass-brd: rgba(255, 255, 255, 0.7);
         --glass-shadow: 0 10px 40px rgba(30, 41, 82, 0.12);
         --track: rgba(20, 30, 60, 0.1);
-        --blob-a: rgba(99, 102, 241, 0.28);
-        --blob-b: rgba(245, 194, 75, 0.3);
+        --blob-a: rgba(96, 165, 250, 0.3);
+        --blob-b: rgba(139, 92, 246, 0.26);
         --scrim: rgba(255, 255, 255, 0.6);
+        /* Soft light-blue -> violet page wash (light mode only) */
+        --bg-grad: linear-gradient(160deg, #eaf1ff 0%, #eef0fd 45%, #f3ecff 100%);
       }
 
       /* ---------- Dark theme (night sky) ---------- */
@@ -97,6 +99,8 @@
         --blob-a: rgba(99, 102, 241, 0.35);
         --blob-b: rgba(245, 194, 75, 0.22);
         --scrim: rgba(10, 14, 30, 0.55);
+        /* Dark mode keeps the flat backdrop */
+        --bg-grad: var(--bg-1);
       }
 
       * {
@@ -113,7 +117,7 @@
         margin: 0;
         font-family: var(--font-body);
         color: var(--text);
-        background: var(--bg-1);
+        background: var(--bg-grad);
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
         transition: background 0.5s var(--ease), color 0.5s var(--ease);
@@ -125,7 +129,7 @@
         inset: 0;
         z-index: -1;
         overflow: hidden;
-        background: var(--bg-1);
+        background: var(--bg-grad);
       }
       .aurora::before,
       .aurora::after {
@@ -211,6 +215,20 @@
         font-size: 1.15rem;
         letter-spacing: -0.01em;
         color: var(--text-strong);
+      }
+      .brand-tag {
+        font-family: var(--font-body);
+        font-weight: 400;
+        font-size: 0.78rem;
+        letter-spacing: 0;
+        color: var(--text-muted);
+        padding-left: 12px;
+        border-left: 1px solid var(--glass-brd);
+      }
+      @media (max-width: 640px) {
+        .brand-tag {
+          display: none;
+        }
       }
 
       /* ---------- Typography helpers ---------- */
@@ -692,7 +710,97 @@
         padding: 24px 26px;
         display: flex;
         flex-direction: column;
-        height: 520px;
+        flex: 1;
+        min-height: 0;
+      }
+
+      /* ---------- Docked, collapsible chat (results screen only) ---------- */
+      .chat-dock {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+      }
+      .chat-dock-panel {
+        display: flex;
+        flex-direction: column;
+        width: 380px;
+        max-width: calc(100vw - 40px);
+        height: min(560px, 78vh);
+        overflow: hidden;
+        transform-origin: bottom right;
+        transition: transform 0.3s var(--ease), opacity 0.3s var(--ease);
+      }
+      .chat-dock-panel .chat {
+        border-radius: var(--radius);
+      }
+      .chat-dock-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 4px;
+      }
+      .chat-dock-head .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: var(--text-strong);
+      }
+      .chat-collapse {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text-strong);
+        cursor: pointer;
+        font-size: 1.1rem;
+        line-height: 1;
+        transition: background 0.2s var(--ease);
+      }
+      .chat-collapse:hover {
+        background: color-mix(in srgb, var(--star) 12%, transparent);
+      }
+      .chat-fab {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--font-body);
+        font-weight: 600;
+        font-size: 0.95rem;
+        border: none;
+        border-radius: 999px;
+        padding: 13px 22px;
+        cursor: pointer;
+        color: #10121c;
+        background: linear-gradient(135deg, var(--star), var(--star-deep));
+        box-shadow: 0 10px 28px rgba(245, 158, 11, 0.4);
+        transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+      }
+      .chat-fab:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 34px rgba(245, 158, 11, 0.5);
+      }
+      /* Toggle: show panel when open, FAB when collapsed */
+      .chat-dock:not(.open) .chat-dock-panel {
+        transform: scale(0.9) translateY(12px);
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        bottom: 0;
+        right: 0;
+      }
+      .chat-dock.open .chat-fab {
+        display: none;
       }
       .chat-log {
         flex: 1;
@@ -833,6 +941,319 @@
         .section-card {
           padding: 20px;
         }
+        .chat-dock {
+          left: 12px;
+          right: 12px;
+          bottom: 12px;
+          align-items: stretch;
+        }
+        .chat-dock-panel {
+          width: 100%;
+          max-width: none;
+          height: min(70vh, 520px);
+        }
+        .chat-fab {
+          align-self: flex-end;
+        }
+      }
+
+      /* ---------- Top-bar tabs ---------- */
+      .tabs {
+        display: flex;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-brd);
+      }
+      .tab {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 0.85rem;
+        letter-spacing: -0.01em;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        padding: 8px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: color 0.2s var(--ease), background 0.2s var(--ease);
+      }
+      .tab:hover {
+        color: var(--text-strong);
+      }
+      .tab.active {
+        color: #10121c;
+        background: linear-gradient(135deg, var(--star), var(--star-deep));
+        box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
+      }
+
+      /* ---------- Results action bar (PDF / copy) ---------- */
+      .results-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .btn-sm {
+        padding: 9px 18px;
+        font-size: 0.85rem;
+      }
+
+      /* ---------- Feedback widget ---------- */
+      .feedback {
+        text-align: center;
+        padding: 22px;
+      }
+      .feedback .fb-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .fb-btn {
+        font-size: 1.15rem;
+        line-height: 1;
+        padding: 10px 18px;
+        border-radius: 999px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text-strong);
+        cursor: pointer;
+        transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+      }
+      .fb-btn:hover {
+        transform: translateY(-2px);
+      }
+      .fb-btn.active {
+        border-color: var(--star);
+        box-shadow: 0 0 0 2px rgba(245, 194, 75, 0.25);
+      }
+      .fb-btn:disabled {
+        cursor: default;
+        opacity: 0.55;
+        transform: none;
+      }
+      .fb-comment {
+        margin: 14px auto 0;
+        max-width: 460px;
+        display: flex;
+        gap: 8px;
+      }
+      .fb-comment input {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+      }
+
+      /* ---------- Site footer ---------- */
+      .site-footer {
+        max-width: 1120px;
+        margin: 40px auto 0;
+        padding: 0 24px;
+      }
+      .footer-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 24px 2px 8px;
+        border-top: 1px solid var(--glass-brd);
+      }
+      .footer-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: var(--text-strong);
+      }
+      .footer-links {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .footer-contact-label {
+        font-family: var(--font-display);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+      }
+      .footer-links a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: color 0.2s var(--ease);
+      }
+      .footer-links a:hover {
+        color: var(--star);
+      }
+      .footer-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        text-align: right;
+      }
+      .footer-contact-label {
+        margin-bottom: 2px;
+      }
+      @media (max-width: 640px) {
+        .footer-inner {
+          flex-direction: column;
+          text-align: center;
+        }
+        .footer-links {
+          align-items: center;
+        }
+        .footer-meta {
+          align-items: center;
+          text-align: center;
+        }
+      }
+
+      /* ---------- Welcome: how-to + FAQ ---------- */
+      .howto {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 30px;
+        text-align: left;
+      }
+      .howto-step {
+        padding: 18px;
+        border-radius: 16px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+      }
+      .howto-step .num {
+        font-family: var(--font-display);
+        font-weight: 700;
+        color: var(--star);
+        font-size: 1.1rem;
+      }
+      .howto-step h4 {
+        margin: 6px 0 4px;
+        font-family: var(--font-display);
+        color: var(--text-strong);
+        font-size: 0.98rem;
+      }
+      .howto-step p {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+      .faq {
+        margin-top: 22px;
+        text-align: left;
+      }
+      .faq > .eyebrow {
+        display: block;
+        margin-bottom: 10px;
+      }
+      .faq details {
+        border-bottom: 1px solid var(--glass-brd);
+        padding: 12px 4px;
+      }
+      .faq summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--text-strong);
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .faq summary::-webkit-details-marker { display: none; }
+      .faq summary::after {
+        content: "+";
+        color: var(--text-muted);
+        font-size: 1.1rem;
+      }
+      .faq details[open] summary::after { content: "\2013"; }
+      .faq details p {
+        margin-top: 10px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+      @media (max-width: 640px) {
+        .howto { grid-template-columns: 1fr; }
+      }
+
+      /* ---------- Job-fit specifics ---------- */
+      .jd-input {
+        width: 100%;
+        min-height: 160px;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--glass-brd);
+        background: var(--glass-bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 0.92rem;
+        line-height: 1.5;
+        resize: vertical;
+      }
+      .fit-req {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--glass-brd);
+        color: var(--text);
+        font-size: 0.92rem;
+      }
+      .fit-req .mark { flex-shrink: 0; font-weight: 700; }
+      .fit-req.matched .mark { color: var(--band-high); }
+      .fit-req.missing .mark { color: var(--band-low); }
+
+      /* ---------- Print → PDF ---------- */
+      @media print {
+        .aurora,
+        .topbar-wrap,
+        .results-actions,
+        .feedback,
+        .chat,
+        .chat-dock,
+        .site-footer,
+        .btn,
+        .btn-ghost,
+        .icon-btn { display: none !important; }
+        body { background: #fff !important; }
+        .shell { padding: 0 !important; max-width: none !important; }
+        .grid { display: block !important; }
+        .grid.two-col,
+        .grid.parallel-grid { display: block !important; }
+        .glass {
+          background: #fff !important;
+          box-shadow: none !important;
+          border: 1px solid #ddd !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          margin-bottom: 14px;
+        }
+        .section-card, .card, .parallel-card, .hero, .path-primary {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        * { color: #10121c !important; }
+        .display, h1, h2, h3, h4 { color: #0b1020 !important; }
       }
 
       /* ---------- Reduced motion ---------- */
@@ -855,12 +1276,33 @@
 
     <div class="topbar-wrap">
       <div class="topbar glass">
-        <div class="brand" id="brand">North Star</div>
+        <div class="brand" id="brand"><span>North Star</span><span class="brand-tag">AI career coach</span></div>
+        <div class="tabs" id="tabs" role="tablist">
+          <button class="tab active" id="tab-review" role="tab" data-tab="review">Resume Review</button>
+          <button class="tab" id="tab-fit" role="tab" data-tab="fit">Job Fit</button>
+        </div>
         <button class="icon-btn" id="theme-btn"></button>
       </div>
     </div>
 
     <div id="view"></div>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-brand" id="footer-brand">
+          <span>North Star</span>
+        </div>
+        <div class="footer-meta">
+          <span>© 2026 Vishal Gopalkrishna</span>
+          <nav class="footer-links" aria-label="Author contact">
+            <span class="footer-contact-label">Contact</span>
+            <a href="mailto:gopalkrishna.vishal@gmail.com">Email</a>
+            <a href="https://github.com/vishal786-commits" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://www.linkedin.com/in/vishal-gopalkrishna-33852413/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+          </nav>
+        </div>
+      </div>
+    </footer>
 
     <script>
       "use strict";
@@ -877,6 +1319,30 @@
           throw new Error(detail || `Analysis failed (${res.status})`);
         }
         return res.json();
+      }
+
+      async function fitResume(file, jobDescription) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("job_description", jobDescription);
+        const res = await fetch(`${BASE}/fit`, { method: "POST", body: form });
+        if (!res.ok) {
+          const detail = await safeDetail(res);
+          throw new Error(detail || `Fit check failed (${res.status})`);
+        }
+        return res.json();
+      }
+
+      async function sendFeedback(sessionId, rating, comment) {
+        try {
+          await fetch(`${BASE}/feedback`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId, rating, comment: comment || null }),
+          });
+        } catch {
+          /* feedback is best-effort — never block the UI on it */
+        }
       }
 
       async function sendChat(sessionId, message) {
@@ -1076,6 +1542,7 @@
       });
 
       document.getElementById("brand").prepend(starMark(26));
+      document.getElementById("footer-brand").prepend(starMark(20));
       applyTheme();
 
       /* ---------------- View switching (mirrors src/App.jsx) ---------------- */
@@ -1148,7 +1615,118 @@
           ),
           dz,
           errEl,
-          el("div", { style: { marginTop: "24px" } }, analyzeBtn)
+          el("div", { style: { marginTop: "24px" } }, analyzeBtn),
+          makeHowToFaq("review")
+        );
+        return el("div", { class: "shell" }, el("div", { class: "upload-stage reveal" }, card));
+      }
+
+      /* Welcome extras: how-it-works + FAQ, shared by both upload screens. */
+      function makeHowToFaq(tab) {
+        const steps =
+          tab === "fit"
+            ? [
+                ["1", "Upload + paste", "Add your resume PDF and paste the job description you're targeting."],
+                ["2", "See your fit", "Get an honest match score, what lines up, and what's missing."],
+                ["3", "Tailor it", "Use the suggestions — and the coach chat — to close the gaps."],
+              ]
+            : [
+                ["1", "Upload your PDF", "Drop in your resume. Text is read on our server; the file itself isn't stored."],
+                ["2", "Get your read", "A section-by-section analysis with honest scores and concrete fixes."],
+                ["3", "Ask the coach", "Chat about your results, or switch to Job Fit to target a role."],
+              ];
+
+        const howto = el(
+          "div",
+          { class: "howto" },
+          steps.map(([n, h, p]) =>
+            el("div", { class: "howto-step" }, el("div", { class: "num" }, n), el("h4", null, h), el("p", null, p))
+          )
+        );
+
+        const faqItems = [
+          ["What files can I upload?", "PDF only. If your resume is a scanned image with no selectable text, extraction will fail — export a text-based PDF instead."],
+          ["Is my resume stored?", "The PDF is processed in memory and discarded. Extracted text lives in a session that expires after 1 hour. Only anonymized metrics (timing, scores, tokens) are kept."],
+          ["What does the ATS score mean?", "A 0–100 read on how applicant-tracking-friendly your resume is — blending keyword match, formatting, and quantification of impact."],
+          ["How is Job Fit different from Resume Review?", "Review evaluates your resume on its own terms. Job Fit compares it against a specific job description and scores how well your demonstrated evidence matches that role."],
+          ["Why is the coach chat limited?", "The chat is capped at 5 messages per session to keep it focused (and costs sane). Re-analyze to start fresh."],
+        ];
+
+        const faq = el(
+          "div",
+          { class: "faq" },
+          el("span", { class: "eyebrow" }, "FAQ"),
+          faqItems.map(([q, a]) =>
+            el("details", null, el("summary", null, q), el("p", null, a))
+          )
+        );
+
+        return el("div", null, howto, faq);
+      }
+
+      /* Job Fit upload (resume PDF + job description). */
+      function makeFitUpload(error) {
+        let file = null;
+
+        const fileInput = el("input", { type: "file", accept: "application/pdf", hidden: true });
+        const dropText = el("p", { class: "muted" }, "Drag a PDF here, or click to browse");
+        const errEl = el("p", { class: "err", style: { display: "none" } });
+        const jd = el("textarea", { class: "jd-input", placeholder: "Paste the job description here…", "aria-label": "Job description" });
+        const fitBtn = el("button", { class: "btn", disabled: true }, "Check fit");
+        const dz = el("div", { class: "dropzone", role: "button", tabindex: "0" }, fileInput, dropText);
+
+        function setErr(m) {
+          errEl.textContent = m || "";
+          errEl.style.display = m ? "" : "none";
+        }
+        function refresh() {
+          fitBtn.disabled = !(file && jd.value.trim());
+        }
+        function pick(f) {
+          if (!f) return;
+          if (f.type !== "application/pdf") {
+            setErr("Please choose a PDF file.");
+            return;
+          }
+          setErr("");
+          file = f;
+          dropText.className = "file-name";
+          dropText.textContent = f.name;
+          refresh();
+        }
+
+        dz.addEventListener("click", () => fileInput.click());
+        dz.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") fileInput.click();
+        });
+        dz.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dz.classList.add("drag");
+        });
+        dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+        dz.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dz.classList.remove("drag");
+          pick(e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", (e) => pick(e.target.files && e.target.files[0]));
+        jd.addEventListener("input", refresh);
+        fitBtn.addEventListener("click", () => handleFit(file, jd.value));
+
+        setErr(error);
+
+        const card = el(
+          "div",
+          { class: "upload-card glass" },
+          el("div", { style: { width: "52px", height: "52px", margin: "0 auto 20px" } }, starMark(52)),
+          el("p", { class: "eyebrow" }, "Job Fit"),
+          el("h1", { class: "display", style: { margin: "8px 0 12px" } }, "See how you fit a specific role."),
+          el("p", { class: "muted" }, "Upload your resume and paste a job description — get an honest, evidence-based match."),
+          dz,
+          jd,
+          errEl,
+          el("div", { style: { marginTop: "24px" } }, fitBtn),
+          makeHowToFaq("fit")
         );
         return el("div", { class: "shell" }, el("div", { class: "upload-stage reveal" }, card));
       }
@@ -1300,6 +1878,42 @@
         return panel;
       }
 
+      /* Docked, collapsible chat — wraps makeChatPanel. Fixed to the right,
+         starts open, collapses to a floating launcher. Only ever mounted inside
+         the results views, so it disappears on upload/loading automatically. */
+      function makeChatDock(sessionId) {
+        const collapseBtn = el(
+          "button",
+          { class: "chat-collapse", type: "button", "aria-label": "Collapse chat", title: "Collapse chat" },
+          "—"
+        );
+        const panelWrap = el(
+          "div",
+          { class: "chat-dock-panel" },
+          el(
+            "div",
+            { class: "chat-dock-head" },
+            el("span", { class: "title" }, starMark(20), "Coach chat"),
+            collapseBtn
+          ),
+          makeChatPanel(sessionId)
+        );
+
+        const fab = el(
+          "button",
+          { class: "chat-fab", type: "button", "aria-label": "Open coach chat" },
+          starMark(20),
+          el("span", null, "Coach")
+        );
+
+        const dock = el("div", { class: "chat-dock open" }, panelWrap, fab);
+
+        collapseBtn.addEventListener("click", () => dock.classList.remove("open"));
+        fab.addEventListener("click", () => dock.classList.add("open"));
+
+        return dock;
+      }
+
       /* Results (mirrors src/components/ResultsView.jsx) */
       function detailBlock(kind, title, items) {
         return el(
@@ -1349,6 +1963,157 @@
         );
       }
 
+      /* Download-PDF + copy-summary actions, shared by both result views. */
+      function resultsActions(summaryText) {
+        const copyBtn = el("button", { class: "btn btn-ghost btn-sm" }, "Copy summary");
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(summaryText);
+            const prev = copyBtn.textContent;
+            copyBtn.textContent = "Copied ✓";
+            setTimeout(() => (copyBtn.textContent = prev), 1600);
+          } catch {
+            copyBtn.textContent = "Copy failed";
+          }
+        });
+        const pdfBtn = el("button", { class: "btn btn-sm" }, "Download PDF");
+        pdfBtn.addEventListener("click", () => window.print());
+        return el("div", { class: "results-actions" }, pdfBtn, copyBtn);
+      }
+
+      /* "Was this helpful?" — the human relevance signal. */
+      function makeFeedback(sessionId) {
+        let done = false;
+        const up = el("button", { class: "fb-btn", "aria-label": "Helpful" }, "👍");
+        const down = el("button", { class: "fb-btn", "aria-label": "Not helpful" }, "👎");
+        const thanks = el("p", { class: "muted", style: { marginTop: "12px", display: "none" } }, "Thanks for the feedback.");
+
+        const commentInput = el("input", { placeholder: "What was off? (optional)", "aria-label": "Feedback comment" });
+        const commentSend = el("button", { class: "btn btn-ghost btn-sm" }, "Send");
+        const commentRow = el("div", { class: "fb-comment", style: { display: "none" } }, commentInput, commentSend);
+
+        function lock(active) {
+          done = true;
+          up.disabled = true;
+          down.disabled = true;
+          active.classList.add("active");
+          thanks.style.display = "";
+        }
+        up.addEventListener("click", () => {
+          if (done) return;
+          lock(up);
+          commentRow.style.display = "none";
+          sendFeedback(sessionId, "up", null);
+        });
+        down.addEventListener("click", () => {
+          if (done) return;
+          lock(down);
+          commentRow.style.display = "flex";
+        });
+        commentSend.addEventListener("click", () => {
+          sendFeedback(sessionId, "down", commentInput.value);
+          commentRow.style.display = "none";
+        });
+
+        return el(
+          "section",
+          { class: "feedback glass reveal" },
+          el("p", { class: "eyebrow", style: { marginBottom: "12px" } }, "Was this helpful?"),
+          el("div", { class: "fb-row" }, up, down),
+          commentRow,
+          thanks
+        );
+      }
+
+      /* Job-fit results view. */
+      function makeFitResults(data) {
+        const { fit, session_id } = data;
+        const celebrate = fit.match_score >= 80;
+
+        const sparkles = el("div", { class: "sparkles", "aria-hidden": "true" }, Array.from({ length: 5 }, () => el("span")));
+        const hero = el(
+          "section",
+          { class: `hero glass reveal ${celebrate ? "celebrate" : ""}` },
+          el("div", { class: "ring-wrap" }, sparkles, circularScore(fit.match_score, { label: "Match score" })),
+          el(
+            "div",
+            { class: "hero-copy" },
+            el("p", { class: "eyebrow" }, "How you fit this role"),
+            el("p", { class: "hero-verdict" }, fit.verdict),
+            resultsActions(`${fit.verdict}\n\n${fit.summary}`),
+            el("div", { style: { marginTop: "12px" } }, el("button", { class: "btn btn-ghost", onClick: () => reset("fit") }, "Check another job"))
+          )
+        );
+
+        function reqList(title, items, kind, mark) {
+          if (!items || items.length === 0) return null;
+          return el(
+            "section",
+            { class: "card glass reveal", style: { animationDelay: "0.05s" } },
+            el("div", { class: "section-title" }, el("h2", { class: "display", style: { fontSize: "1.25rem" } }, title)),
+            el("div", null, items.map((r) => el("div", { class: `fit-req ${kind}` }, el("span", { class: "mark" }, mark), el("span", null, r))))
+          );
+        }
+
+        const matched = reqList("What lines up", fit.matched_requirements, "matched", "✓");
+        const missing = reqList("What's missing", fit.missing_requirements, "missing", "✕");
+        const reqCols = el("div", { class: "grid two-col" }, matched, missing);
+
+        const strengthsBlock =
+          fit.strengths_for_role && fit.strengths_for_role.length
+            ? el(
+                "section",
+                { class: "card glass reveal", style: { animationDelay: "0.1s" } },
+                el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Why you're a strong candidate"),
+                el("ul", { class: "notes" }, fit.strengths_for_role.map((s) => el("li", null, s)))
+              )
+            : null;
+
+        const gapsBlock =
+          fit.gaps && fit.gaps.length
+            ? el(
+                "section",
+                { class: "card glass reveal", style: { animationDelay: "0.12s" } },
+                el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Gaps to close"),
+                el("ul", { class: "notes" }, fit.gaps.map((g) => el("li", null, g)))
+              )
+            : null;
+
+        const tailorBlock =
+          fit.tailoring_suggestions && fit.tailoring_suggestions.length
+            ? el(
+                "section",
+                { class: "card glass reveal", style: { animationDelay: "0.14s" } },
+                el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Tailor your resume for this job"),
+                el("ul", { class: "notes" }, fit.tailoring_suggestions.map((t) => el("li", null, t)))
+              )
+            : null;
+
+        const summaryBlock = el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.16s" } },
+          el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "10px" } }, "The honest call"),
+          el("p", { style: { color: "var(--text)", lineHeight: "1.6" } }, fit.summary)
+        );
+
+        return el(
+          "div",
+          { class: "shell" },
+          el(
+            "div",
+            { class: "grid" },
+            hero,
+            reqCols,
+            strengthsBlock,
+            gapsBlock,
+            tailorBlock,
+            summaryBlock,
+            el("section", { class: "reveal", style: { animationDelay: "0.1s" } }, makeFeedback(session_id))
+          ),
+          makeChatDock(session_id)
+        );
+      }
+
       function makeResults(data) {
         const { analysis, session_id } = data;
         const { ats, length, sections, overall_improvements, primary_path, parallel_paths, summary } =
@@ -1370,7 +2135,8 @@
             { class: "hero-copy" },
             el("p", { class: "eyebrow" }, "Your north star reading"),
             el("p", { class: "hero-verdict" }, summary),
-            el("button", { class: "btn btn-ghost", onClick: reset }, "Analyze another resume")
+            resultsActions(summary),
+            el("div", { style: { marginTop: "12px" } }, el("button", { class: "btn btn-ghost", onClick: () => reset("review") }, "Analyze another resume"))
           )
         );
 
@@ -1469,11 +2235,11 @@
           el("ul", { class: "notes" }, overall_improvements.map((imp) => el("li", null, imp)))
         );
 
-        // CHAT
-        const chatBlock = el(
+        // FEEDBACK
+        const feedbackBlock = el(
           "section",
-          { class: "reveal", style: { animationDelay: "0.1s" } },
-          makeChatPanel(session_id)
+          { class: "reveal", style: { animationDelay: "0.08s" } },
+          makeFeedback(session_id)
         );
 
         return el(
@@ -1488,33 +2254,90 @@
             primaryBlock,
             parallelBlock,
             improvementsBlock,
-            chatBlock
-          )
+            feedbackBlock
+          ),
+          makeChatDock(session_id)
         );
       }
 
-      /* ---------------- App orchestration (mirrors src/App.jsx) ---------------- */
-      async function handleAnalyze(file) {
-        if (!file) return;
-        setView(makeLoading());
-        startLoaderCycle();
-        try {
-          const data = await analyzeResume(file);
-          stopLoaderCycle();
-          setView(makeResults(data));
-        } catch (e) {
-          stopLoaderCycle();
-          setView(makeUpload(e.message || "Something went wrong. Try again."));
+      /* ---------------- App orchestration (tab-aware) ---------------- */
+      // Each tab keeps its own state so switching tabs preserves results.
+      const tabState = {
+        review: { status: "upload", data: null, error: "" },
+        fit: { status: "upload", data: null, error: "" },
+      };
+      let activeTab = "review";
+
+      function renderActiveTab() {
+        const s = tabState[activeTab];
+        if (s.status === "loading") {
+          setView(makeLoading());
+          startLoaderCycle();
+          return;
         }
+        stopLoaderCycle();
+        if (s.status === "results") {
+          setView(activeTab === "review" ? makeResults(s.data) : makeFitResults(s.data));
+          return;
+        }
+        setView(activeTab === "review" ? makeUpload(s.error) : makeFitUpload(s.error));
       }
 
-      function reset() {
-        stopLoaderCycle();
-        setView(makeUpload(""));
+      function renderIfActive(tab) {
+        if (tab === activeTab) renderActiveTab();
+      }
+
+      function switchTab(tab) {
+        if (tab === activeTab || !tabState[tab]) return;
+        activeTab = tab;
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
+        renderActiveTab();
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const btn = e.target.closest(".tab");
+        if (btn) switchTab(btn.dataset.tab);
+      });
+
+      async function handleAnalyze(file) {
+        if (!file) return;
+        tabState.review.status = "loading";
+        tabState.review.error = "";
+        renderIfActive("review");
+        try {
+          tabState.review.data = await analyzeResume(file);
+          tabState.review.status = "results";
+        } catch (e) {
+          tabState.review.status = "upload";
+          tabState.review.error = e.message || "Something went wrong. Try again.";
+        }
+        renderIfActive("review");
+      }
+
+      async function handleFit(file, jobDescription) {
+        if (!file || !jobDescription.trim()) return;
+        tabState.fit.status = "loading";
+        tabState.fit.error = "";
+        renderIfActive("fit");
+        try {
+          tabState.fit.data = await fitResume(file, jobDescription);
+          tabState.fit.status = "results";
+        } catch (e) {
+          tabState.fit.status = "upload";
+          tabState.fit.error = e.message || "Something went wrong. Try again.";
+        }
+        renderIfActive("fit");
+      }
+
+      function reset(tab) {
+        tabState[tab] = { status: "upload", data: null, error: "" };
+        renderIfActive(tab);
       }
 
       // Initial render.
-      setView(makeUpload(""));
+      renderActiveTab();
     </script>
   </body>
 </html>

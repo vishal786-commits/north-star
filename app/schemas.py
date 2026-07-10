@@ -42,9 +42,24 @@ class Analysis(BaseModel):
     parallel_paths: list[ParallelPath] = Field(min_length=2, max_length=3)  # exactly 2-3 realistic paths
     summary: str
 
+class FitAnalysis(BaseModel):
+    """How well a resume fits a specific job description."""
+    match_score: int = Field(ge=0, le=100)        # overall fit, evidence-based
+    verdict: str                                  # one-line honest call
+    matched_requirements: list[str]               # JD needs the evidence supports
+    missing_requirements: list[str]               # JD needs the resume does NOT demonstrate
+    strengths_for_role: list[str]                 # what makes them a strong candidate here
+    gaps: list[str]                               # concrete gaps to close
+    tailoring_suggestions: list[str]              # how to tailor the resume for THIS job
+    summary: str
+
 class AnalyzeResponse(BaseModel):
     session_id: str
     analysis: Analysis
+
+class FitResponse(BaseModel):
+    session_id: str
+    fit: FitAnalysis
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -54,3 +69,8 @@ class ChatResponse(BaseModel):
     reply: str
     messages_remaining: int
     limit_reached: bool
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    rating: Literal["up", "down"]
+    comment: str | None = None

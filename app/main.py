@@ -4,10 +4,18 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.routes import router
+from app.metrics import init_db
 
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="North Star")
+
+
+@app.on_event("startup")
+def _startup():
+    # Create the SQLite metrics tables if they don't exist yet.
+    init_db()
+
 
 app.include_router(router, prefix="/api")
 

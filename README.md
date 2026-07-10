@@ -24,7 +24,9 @@ Upload a resume (PDF) and North Star returns a structured, section-aware analysi
 - **Section-by-section breakdown** — the LLM identifies *every* section, including non-standard ones you invented, and scores each with specific strengths, issues, and suggestions.
 - **Length verdict** — an opinionated one-page-preferred assessment (page count is a hard fact; whether the length is *justified* is the model's judgment).
 - **Career direction** — where your resume points, based on demonstrated evidence rather than self-branding, plus 2–3 realistic parallel paths with concrete requirements and an effort rating.
-- **Coaching chat** — a follow-up conversation about your analysis, grounded in your resume and its scores, with a per-session message limit enforced by the server.
+- **Job Fit** — paste a specific job description and get an honest, evidence-based match score, what lines up vs. what's missing, gaps to close, and concrete ways to tailor the resume for *that* role.
+- **Coaching chat** — a follow-up conversation about your analysis (or job fit), grounded in your resume and its scores, with a per-session message limit enforced by the server.
+- **Monitoring & feedback** — every request is recorded to a durable SQLite store (latency, token usage, scores, errors), a 👍/👎 widget captures result quality, and a `/metrics.html` dashboard surfaces the aggregates.
 
 ## Architecture
 
@@ -97,6 +99,10 @@ Create a `.env` in the project root:
 ```env
 OPENAI_API_KEY=sk-your-key
 REDIS_URL=redis://default:password@host:port   # or redis://localhost:6379
+
+# Optional — monitoring
+METRICS_DB_PATH=data/metrics.db   # durable SQLite store (default shown)
+ADMIN_TOKEN=some-long-secret      # guards GET /api/metrics + /metrics.html; if unset, the dashboard is open
 ```
 
 Run it:
@@ -123,13 +129,18 @@ Then open `http://127.0.0.1:8000/`.
 | Method & path | Body | Returns |
 |---|---|---|
 | `POST /api/analyze` | multipart form, field `file` (PDF) | `{ session_id, analysis }` |
+| `POST /api/fit` | multipart form, `file` (PDF) + `job_description` (text) | `{ session_id, fit }` |
 | `POST /api/chat` | JSON `{ session_id, message }` | `{ reply, messages_remaining, limit_reached }` |
+| `POST /api/feedback` | JSON `{ session_id, rating, comment? }` (`rating`: `up`\|`down`) | `{ status }` |
+| `GET /api/metrics` | query `?token=` or header `X-Admin-Token` | aggregate monitoring JSON |
 | `GET /health` | — | `{ "status": "ok" }` |
 
 **Notes**
 - Sessions are stored in Redis and expire after **1 hour** of inactivity.
 - The coaching chat is capped at **5 messages per session**; the 6th request returns `429`.
 - `analysis` contains: `ats`, `length`, `sections[]`, `overall_improvements[]`, `primary_path`, `parallel_paths[]`, and a `summary`.
+- `fit` contains: `match_score`, `verdict`, `matched_requirements[]`, `missing_requirements[]`, `strengths_for_role[]`, `gaps[]`, `tailoring_suggestions[]`, and a `summary`.
+- **Metrics** persist to SQLite (`METRICS_DB_PATH`); `GET /api/metrics` requires `ADMIN_TOKEN` when one is set. The dashboard lives at `/metrics.html`.
 
 ## Project structure
 
@@ -140,12 +151,14 @@ north-star/
 │   ├── config.py            # typed settings from .env
 │   ├── schemas.py           # Pydantic data contracts
 │   ├── extractor.py         # PDF → text + page count
-│   ├── analyzer.py          # OpenAI analysis + chat, schema validation
+│   ├── analyzer.py          # OpenAI analysis + fit + chat, schema validation
 │   ├── session.py           # Redis session layer + message limit
-│   ├── routes.py            # /api/analyze and /api/chat
+│   ├── metrics.py           # durable SQLite metrics + feedback store
+│   ├── routes.py            # /api/analyze, /api/fit, /api/chat, /api/feedback, /api/metrics
 │   └── errors.py            # custom exception types
 ├── static/
-│   └── index.html           # entire self-contained frontend
+│   ├── index.html           # entire self-contained frontend (tabs, results, chat)
+│   └── metrics.html         # monitoring dashboard
 ├── Dockerfile               # single-image build
 └── requirements.txt
 ```
@@ -157,7 +170,9 @@ North Star is **actively in development** — built in public.
 - [x] Async backend: PDF extraction, OpenAI analysis, schema validation, Redis sessions
 - [x] `/api/analyze` endpoint — working end to end
 - [x] `/api/chat` endpoint — coaching conversation with per-session limit
-- [x] Frontend — glassmorphism UI, light/dark, animated scoring (single-file, no build)
+- [x] `/api/fit` endpoint — resume-to-job fit analysis
+- [x] Frontend — glassmorphism UI, light/dark, animated scoring, Resume Review + Job Fit tabs, PDF export, how-to/FAQ (single-file, no build)
+- [x] Monitoring — SQLite metrics + feedback widget + `/metrics.html` dashboard
 - [x] Single-container Docker image
 - [ ] AWS ECS Fargate deployment
 - [ ] Live demo
@@ -165,5 +180,13 @@ North Star is **actively in development** — built in public.
 ---
 
 <div align="center">
-<sub>Built by Vishal Gopalkrishna. Feedback and issues welcome.</sub>
+<sub>Built by <b>Vishal Gopalkrishna</b> — feedback and issues welcome.</sub>
+<br/>
+<sub>
+<a href="mailto:gopalkrishna.vishal@gmail.com">Email</a> ·
+<a href="https://github.com/vishal786-commits">GitHub</a> ·
+<a href="https://www.linkedin.com/in/vishal-gopalkrishna-33852413/">LinkedIn</a>
+</sub>
+<br/>
+<sub>© 2026 Vishal Gopalkrishna</sub>
 </div>
