@@ -2,12 +2,13 @@ import asyncio
 import logging
 import time
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Header
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Header, Depends
 
 from app import metrics
 from app.config import settings
 from app.extractor import extract_resume
 from app.analyzer import analyze_resume, analyze_fit, chat_reply
+from app.ratelimit import enforce_daily_limit
 from app.session import create_session, get_session, save_session, MESSAGE_LIMIT
 from app.schemas import (
     AnalyzeResponse,
@@ -23,7 +24,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
+@router.post("/analyze", response_model=AnalyzeResponse,
+             dependencies=[Depends(enforce_daily_limit)])
 async def analyze(file: UploadFile = File(...)):
     t0 = time.perf_counter()
 
@@ -31,8 +33,13 @@ async def analyze(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
 
-    # 2. Read the uploaded file into bytes.
+    # 2. Read the uploaded file into bytes, capping size to avoid memory blowups.
     pdf_bytes = await file.read()
+    if len(pdf_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {settings.max_upload_bytes // (1024 * 1024)} MB).",
+        )
 
     # 3. Extract text. PyMuPDF is BLOCKING/CPU-bound, so we offload it to a
     #    thread — otherwise it would freeze the whole event loop.
@@ -67,7 +74,8 @@ async def analyze(file: UploadFile = File(...)):
     return AnalyzeResponse(session_id=session_id, analysis=analysis)
 
 
-@router.post("/fit", response_model=FitResponse)
+@router.post("/fit", response_model=FitResponse,
+             dependencies=[Depends(enforce_daily_limit)])
 async def fit(file: UploadFile = File(...), job_description: str = Form(...)):
     t0 = time.perf_counter()
 
@@ -77,7 +85,18 @@ async def fit(file: UploadFile = File(...), job_description: str = Form(...)):
     if not job_description or not job_description.strip():
         raise HTTPException(status_code=400, detail="Please paste the job description.")
 
+    if len(job_description) > settings.max_jd_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Job description too long (max {settings.max_jd_chars} characters).",
+        )
+
     pdf_bytes = await file.read()
+    if len(pdf_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {settings.max_upload_bytes // (1024 * 1024)} MB).",
+        )
 
     try:
         extract_t0 = time.perf_counter()

@@ -1711,10 +1711,12 @@
 
       /* Loader (mirrors src/components/Loader.jsx) */
       const LOADER_LINES = [
-        "Reading your resume…",
-        "Mapping every section…",
-        "Weighing evidence against claims…",
-        "Charting where it points…",
+      "Reading your resume…",
+      "Sending your request across the internet…",
+      "Waking up thousands of GPU cores…",
+      "Running billions of transformer computations…",
+      "Tracing patterns across your experience…",
+      "Charting where it points…",
       ];
       let loaderTimer = null;
       let loaderStep = 0;
@@ -2025,7 +2027,7 @@
           );
         }
 
-        const matched = reqList("What lines up", fit.matched_requirements, "matched", "✓");
+        const matched = reqList("Matching Skills", fit.matched_requirements, "matched", "✓");
         const missing = reqList("What's missing", fit.missing_requirements, "missing", "✕");
         const reqCols = el("div", { class: "grid two-col" }, matched, missing);
 
@@ -2034,7 +2036,7 @@
             ? el(
                 "section",
                 { class: "card glass reveal", style: { animationDelay: "0.1s" } },
-                el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Why you're a strong candidate"),
+                el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "14px" } }, "Positives for this role"),
                 el("ul", { class: "notes" }, fit.strengths_for_role.map((s) => el("li", null, s)))
               )
             : null;

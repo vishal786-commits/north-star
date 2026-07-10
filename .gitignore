@@ -19,4 +19,6 @@ data/
 
 # Personal / scratch
 resume.pdf
-test_*.py
+/test_*.py
+
+production_plan.txt

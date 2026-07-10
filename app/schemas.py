@@ -63,7 +63,7 @@ class FitResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     session_id: str
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
 
 class ChatResponse(BaseModel):
     reply: str
