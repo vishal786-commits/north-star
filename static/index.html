@@ -50,8 +50,9 @@
         --font-body: "Inter", system-ui, -apple-system, sans-serif;
 
         /* Brand accents (shared across themes) */
-        --star: #f5c24b;          /* the guiding star — gold */
-        --star-deep: #f59e0b;
+        --star: #4b56f5;          /* the guiding star — gold */
+        --star-deep: #daf8df;
+        --sky: #3e6e82;           /* chat sky-blue */
         --indigo: #6366f1;        /* the sky — cosmic indigo */
         --violet: #8b5cf6;
 
@@ -82,7 +83,7 @@
         --blob-b: rgba(139, 92, 246, 0.26);
         --scrim: rgba(255, 255, 255, 0.6);
         /* Soft light-blue -> violet page wash (light mode only) */
-        --bg-grad: linear-gradient(160deg, #eaf1ff 0%, #eef0fd 45%, #f3ecff 100%);
+        --bg-grad: linear-gradient(160deg, #ffeaf9 0%, #e2ecff 45%, #f3ecff 100%);
       }
 
       /* ---------- Dark theme (night sky) ---------- */
@@ -741,17 +742,9 @@
       .chat-dock-head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         gap: 12px;
         margin-bottom: 4px;
-      }
-      .chat-dock-head .title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-family: var(--font-display);
-        font-weight: 600;
-        color: var(--text-strong);
       }
       .chat-collapse {
         width: 32px;
@@ -782,13 +775,13 @@
         padding: 13px 22px;
         cursor: pointer;
         color: #10121c;
-        background: linear-gradient(135deg, var(--star), var(--star-deep));
-        box-shadow: 0 10px 28px rgba(245, 158, 11, 0.4);
+        background: linear-gradient(135deg, var(--sky), var(--star));
+        box-shadow: 0 10px 28px rgba(63, 156, 255, 0.4);
         transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
       }
       .chat-fab:hover {
         transform: translateY(-2px);
-        box-shadow: 0 14px 34px rgba(245, 158, 11, 0.5);
+        box-shadow: 0 14px 34px rgba(63, 156, 255, 0.5);
       }
       /* Toggle: show panel when open, FAB when collapsed */
       .chat-dock:not(.open) .chat-dock-panel {
@@ -821,7 +814,7 @@
       }
       .bubble.user {
         align-self: flex-end;
-        background: linear-gradient(135deg, var(--indigo), var(--violet));
+        background: linear-gradient(135deg, var(--sky), var(--star));
         color: #fff;
         border-bottom-right-radius: 5px;
       }
@@ -1067,36 +1060,28 @@
         padding: 24px 2px 8px;
         border-top: 1px solid var(--glass-brd);
       }
-      .footer-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-family: var(--font-display);
-        font-weight: 600;
-        color: var(--text-strong);
-      }
       .footer-links {
         display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
       }
       .footer-contact-label {
-        font-family: var(--font-display);
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        font-size: 0.72rem;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
         color: var(--text-muted);
       }
       .footer-links a {
-        color: var(--text-muted);
+        color: var(--star);
         text-decoration: none;
+        font-family: var(--font-body);
         font-size: 0.9rem;
         font-weight: 500;
         transition: color 0.2s var(--ease);
       }
       .footer-links a:hover {
-        color: var(--star);
+        color: var(--sky);
       }
       .footer-meta {
         display: flex;
@@ -1106,9 +1091,6 @@
         font-size: 0.78rem;
         color: var(--text-muted);
         text-align: right;
-      }
-      .footer-contact-label {
-        margin-bottom: 2px;
       }
       @media (max-width: 640px) {
         .footer-inner {
@@ -1289,17 +1271,14 @@
 
     <footer class="site-footer">
       <div class="footer-inner">
-        <div class="footer-brand" id="footer-brand">
-          <span>North Star</span>
-        </div>
+        <nav class="footer-links" aria-label="Author contact">
+          <span class="footer-contact-label">Contact</span>
+          <a href="mailto:gopalkrishna.vishal@gmail.com">Email</a>
+          <a href="https://github.com/vishal786-commits" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://www.linkedin.com/in/vishal-gopalkrishna-33852413/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        </nav>
         <div class="footer-meta">
           <span>© 2026 Vishal Gopalkrishna</span>
-          <nav class="footer-links" aria-label="Author contact">
-            <span class="footer-contact-label">Contact</span>
-            <a href="mailto:gopalkrishna.vishal@gmail.com">Email</a>
-            <a href="https://github.com/vishal786-commits" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a href="https://www.linkedin.com/in/vishal-gopalkrishna-33852413/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-          </nav>
         </div>
       </div>
     </footer>
@@ -1542,7 +1521,6 @@
       });
 
       document.getElementById("brand").prepend(starMark(26));
-      document.getElementById("footer-brand").prepend(starMark(20));
       applyTheme();
 
       /* ---------------- View switching (mirrors src/App.jsx) ---------------- */
@@ -1893,7 +1871,6 @@
           el(
             "div",
             { class: "chat-dock-head" },
-            el("span", { class: "title" }, starMark(20), "Coach chat"),
             collapseBtn
           ),
           makeChatPanel(sessionId)
@@ -1903,7 +1880,7 @@
           "button",
           { class: "chat-fab", type: "button", "aria-label": "Open coach chat" },
           starMark(20),
-          el("span", null, "Coach")
+          el("span", null, "Chat with AI career coach")
         );
 
         const dock = el("div", { class: "chat-dock open" }, panelWrap, fab);
@@ -1963,22 +1940,16 @@
         );
       }
 
-      /* Download-PDF + copy-summary actions, shared by both result views. */
-      function resultsActions(summaryText) {
-        const copyBtn = el("button", { class: "btn btn-ghost btn-sm" }, "Copy summary");
-        copyBtn.addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(summaryText);
-            const prev = copyBtn.textContent;
-            copyBtn.textContent = "Copied ✓";
-            setTimeout(() => (copyBtn.textContent = prev), 1600);
-          } catch {
-            copyBtn.textContent = "Copy failed";
-          }
-        });
+      /* Download-PDF + reset actions, shared by both result views. */
+      function resultsActions(resetTab, resetLabel) {
         const pdfBtn = el("button", { class: "btn btn-sm" }, "Download PDF");
         pdfBtn.addEventListener("click", () => window.print());
-        return el("div", { class: "results-actions" }, pdfBtn, copyBtn);
+        const resetBtn = el(
+          "button",
+          { class: "btn btn-ghost btn-sm", onClick: () => reset(resetTab) },
+          resetLabel
+        );
+        return el("div", { class: "results-actions" }, pdfBtn, resetBtn);
       }
 
       /* "Was this helpful?" — the human relevance signal. */
@@ -2040,8 +2011,7 @@
             { class: "hero-copy" },
             el("p", { class: "eyebrow" }, "How you fit this role"),
             el("p", { class: "hero-verdict" }, fit.verdict),
-            resultsActions(`${fit.verdict}\n\n${fit.summary}`),
-            el("div", { style: { marginTop: "12px" } }, el("button", { class: "btn btn-ghost", onClick: () => reset("fit") }, "Check another job"))
+            resultsActions("fit", "Check another job")
           )
         );
 
@@ -2135,8 +2105,7 @@
             { class: "hero-copy" },
             el("p", { class: "eyebrow" }, "Your north star reading"),
             el("p", { class: "hero-verdict" }, summary),
-            resultsActions(summary),
-            el("div", { style: { marginTop: "12px" } }, el("button", { class: "btn btn-ghost", onClick: () => reset("review") }, "Analyze another resume"))
+            resultsActions("review", "Analyze another resume")
           )
         );
 
