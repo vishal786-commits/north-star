@@ -1289,9 +1289,27 @@
       /* ---------------- API layer (mirrors src/api.js) ---------------- */
       const BASE = "/api";
 
+      /* Target market — drives length rules, what-to-cut, spelling, CV vs resume.
+         Persisted so the choice sticks across uploads. */
+      const MARKETS = [
+        ["india_modern", "India · Modern", "Product / startup / GCC / MNC"],
+        ["india_traditional", "India · Traditional", "PSU / government / legacy service"],
+        ["uk", "UK", "CV · British English · Equality Act"],
+        ["us_global", "US / Global", "Generic Western norms"],
+      ];
+      const DEFAULT_MARKET = "india_modern";
+      function getMarket() {
+        const m = localStorage.getItem("ns-market");
+        return MARKETS.some(([code]) => code === m) ? m : DEFAULT_MARKET;
+      }
+      function setMarket(code) {
+        localStorage.setItem("ns-market", code);
+      }
+
       async function analyzeResume(file) {
         const form = new FormData();
         form.append("file", file);
+        form.append("market", getMarket());
         const res = await fetch(`${BASE}/analyze`, { method: "POST", body: form });
         if (!res.ok) {
           const detail = await safeDetail(res);
@@ -1304,6 +1322,7 @@
         const form = new FormData();
         form.append("file", file);
         form.append("job_description", jobDescription);
+        form.append("market", getMarket());
         const res = await fetch(`${BASE}/fit`, { method: "POST", body: form });
         if (!res.ok) {
           const detail = await safeDetail(res);
@@ -1529,6 +1548,47 @@
         viewRoot.replaceChildren(node);
       }
 
+      /* Target-market selector — a compact segmented control shown above each
+         upload. Persists the choice; tailors every downstream piece of advice. */
+      function marketSelector() {
+        const current = getMarket();
+        const hint = el("p", { class: "muted", style: { fontSize: "0.82rem", marginTop: "10px" } });
+        const btns = [];
+        function paint() {
+          const active = getMarket();
+          btns.forEach((b) => {
+            const on = b.dataset.code === active;
+            b.style.background = on ? "var(--accent, #6366f1)" : "transparent";
+            b.style.color = on ? "#fff" : "var(--text)";
+            b.style.borderColor = on ? "var(--accent, #6366f1)" : "var(--border, rgba(128,128,128,0.35))";
+            b.setAttribute("aria-pressed", on ? "true" : "false");
+            if (on) hint.textContent = MARKETS.find(([c]) => c === active)[2];
+          });
+        }
+        MARKETS.forEach(([code, label]) => {
+          const b = el("button", {
+            type: "button",
+            class: "market-opt",
+            "data-code": code,
+            style: {
+              padding: "7px 14px", borderRadius: "999px", cursor: "pointer",
+              border: "1px solid", fontSize: "0.85rem", fontWeight: "600",
+              transition: "all 0.15s ease",
+            },
+          }, label);
+          b.addEventListener("click", () => { setMarket(code); paint(); });
+          btns.push(b);
+        });
+        const row = el("div", {
+          style: { display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center" },
+        }, btns);
+        const wrap = el("div", { class: "market-selector", style: { margin: "0 0 22px" } },
+          el("p", { class: "eyebrow", style: { marginBottom: "10px" } }, "Target market"),
+          row, hint);
+        void current; paint();
+        return wrap;
+      }
+
       /* Upload (mirrors src/components/UploadView.jsx) */
       function makeUpload(error) {
         let file = null;
@@ -1591,6 +1651,7 @@
             { class: "muted" },
             "Upload your resume and get a section-by-section read — honest scores, concrete fixes, and the career paths it opens."
           ),
+          marketSelector(),
           dz,
           errEl,
           el("div", { style: { marginTop: "24px" } }, analyzeBtn),
@@ -1625,7 +1686,8 @@
         const faqItems = [
           ["What files can I upload?", "PDF only. If your resume is a scanned image with no selectable text, extraction will fail — export a text-based PDF instead."],
           ["Is my resume stored?", "The PDF is processed in memory and discarded. Extracted text lives in a session that expires after 1 hour. Only anonymized metrics (timing, scores, tokens) are kept."],
-          ["What does the ATS score mean?", "A 0–100 read on how applicant-tracking-friendly your resume is — blending keyword match, formatting, and quantification of impact."],
+          ["What does the ATS score mean?", "A 0–100 read on content quality — keyword match, formatting, and quantification of impact. A separate Parseability score covers machine-readability. And to bust the myth: an ATS does not auto-reject ~75% of resumes (that stat is fabricated). Weak keyword match buries you in search, and a broken layout mis-parses — that's the real risk, not a robot silently deleting your file."],
+          ["What is the target market selector?", "Resume norms differ sharply by market. Pick India (Modern or Traditional), UK, or US/Global and every piece of advice adapts — length rules, what to cut, British vs US spelling, CV vs resume, and market-specific conventions like the UK's no-photo rule or dropping notice period/CTC in India."],
           ["How is Job Fit different from Resume Review?", "Review evaluates your resume on its own terms. Job Fit compares it against a specific job description and scores how well your demonstrated evidence matches that role."],
           ["Why is the coach chat limited?", "The chat is capped at 5 messages per session to keep it focused (and costs sane). Re-analyze to start fresh."],
         ];
@@ -1700,6 +1762,7 @@
           el("p", { class: "eyebrow" }, "Job Fit"),
           el("h1", { class: "display", style: { margin: "8px 0 12px" } }, "See how you fit a specific role."),
           el("p", { class: "muted" }, "Upload your resume and paste a job description — get an honest, evidence-based match."),
+          marketSelector(),
           dz,
           jd,
           errEl,
@@ -1942,6 +2005,102 @@
         );
       }
 
+      /* Parseability card — machine-readability, framed to debunk the ATS myth. */
+      function parseabilityCard(p) {
+        const passBadge = el(
+          "span",
+          { class: `badge ${p.passes_plaintext_test ? "effort-low" : "effort-high"}` },
+          p.passes_plaintext_test ? "✓ Plain-text test" : "✕ Plain-text test"
+        );
+        const card = el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.08s" } },
+          el(
+            "div",
+            { class: "section-title" },
+            el("h2", { class: "display", style: { fontSize: "1.25rem" } }, "Parseability"),
+            passBadge
+          ),
+          progressBar("Machine-readability", p.score, 300)
+        );
+        if (p.issues && p.issues.length)
+          card.appendChild(el("ul", { class: "notes" }, p.issues.map((n) => el("li", null, n))));
+        if (p.notes && p.notes.length)
+          card.appendChild(
+            el("ul", { class: "notes", style: { opacity: "0.85" } }, p.notes.map((n) => el("li", null, n)))
+          );
+        return card;
+      }
+
+      /* XYZ bullet rewrites — before/after cards. Shared by review + fit. */
+      function bulletRewritesBlock(rewrites, subtitle) {
+        if (!rewrites || !rewrites.length) return null;
+        const cards = rewrites.map((r) =>
+          el(
+            "div",
+            { class: "section-card glass" },
+            el("span", { class: "badge" }, r.section),
+            el(
+              "p",
+              { class: "muted", style: { fontSize: "0.86rem", margin: "10px 0 4px" } },
+              "Before"
+            ),
+            el("p", { style: { textDecoration: "line-through", opacity: "0.7" } }, r.original),
+            el(
+              "p",
+              { class: "muted", style: { fontSize: "0.86rem", margin: "12px 0 4px" } },
+              "After"
+            ),
+            el("p", { style: { color: "var(--text)", fontWeight: "600" } }, r.rewrite),
+            el("p", { class: "muted", style: { fontSize: "0.84rem", marginTop: "10px" } }, r.why)
+          )
+        );
+        return el(
+          "section",
+          { class: "reveal", style: { animationDelay: "0.12s" } },
+          el("h2", { class: "display", style: { fontSize: "1.4rem", margin: "16px 0 4px" } }, "Rewrite these bullets"),
+          el("p", { class: "muted", style: { marginBottom: "18px" } },
+            subtitle || "Weak lines rewritten in the XYZ form — verb, what you did, measurable outcome. Grounded in your resume, nothing invented."),
+          el("div", { class: "grid two-col" }, cards)
+        );
+      }
+
+      /* Defensibility flags — "be ready to defend these in an interview." */
+      function defensibilityBlock(flags) {
+        if (!flags || !flags.length) return null;
+        const items = flags.map((f) =>
+          el(
+            "div",
+            { class: "section-card glass" },
+            el("h3", null, f.claim),
+            el("p", { class: "muted", style: { fontSize: "0.9rem", margin: "8px 0" } }, f.risk),
+            el("p", { style: { color: "var(--text)", fontWeight: "600", fontSize: "0.92rem" } }, f.suggestion)
+          )
+        );
+        return el(
+          "section",
+          { class: "reveal", style: { animationDelay: "0.1s" } },
+          el("h2", { class: "display", style: { fontSize: "1.4rem", margin: "16px 0 4px" } }, "Be ready to defend these"),
+          el("p", { class: "muted", style: { marginBottom: "18px" } },
+            "Claims a sharp interviewer would probe. Defend, quantify, or cut each."),
+          el("div", { class: "grid two-col" }, items)
+        );
+      }
+
+      /* What-to-cut list — market-tuned dead weight. Hidden when empty. */
+      function cutBlock(items) {
+        if (!items || !items.length) return null;
+        return el(
+          "section",
+          { class: "card glass reveal", style: { animationDelay: "0.1s" } },
+          el("h2", { class: "display", style: { fontSize: "1.25rem", marginBottom: "6px" } }, "Cut these"),
+          el("p", { class: "muted", style: { marginBottom: "14px", fontSize: "0.9rem" } },
+            "Dead weight for your target market — every line should earn its place."),
+          el("ul", { class: "notes" }, items.map((c) => el("li", null,
+            el("strong", null, c.item), " — ", c.reason)))
+        );
+      }
+
       /* Download-PDF + reset actions, shared by both result views. */
       function resultsActions(resetTab, resetLabel) {
         const pdfBtn = el("button", { class: "btn btn-sm" }, "Download PDF");
@@ -2061,6 +2220,11 @@
               )
             : null;
 
+        const rewritesBlock = bulletRewritesBlock(
+          fit.bullet_rewrites,
+          "Weak lines rewritten to speak this job's language — XYZ form, grounded in your real experience, nothing invented."
+        );
+
         const summaryBlock = el(
           "section",
           { class: "card glass reveal", style: { animationDelay: "0.16s" } },
@@ -2074,13 +2238,16 @@
           el(
             "div",
             { class: "grid" },
-            hero,
-            reqCols,
-            strengthsBlock,
-            gapsBlock,
-            tailorBlock,
-            summaryBlock,
-            el("section", { class: "reveal", style: { animationDelay: "0.1s" } }, makeFeedback(session_id))
+            ...[
+              hero,
+              reqCols,
+              strengthsBlock,
+              gapsBlock,
+              tailorBlock,
+              rewritesBlock,
+              summaryBlock,
+              el("section", { class: "reveal", style: { animationDelay: "0.1s" } }, makeFeedback(session_id)),
+            ].filter(Boolean)
           ),
           makeChatDock(session_id)
         );
@@ -2088,8 +2255,10 @@
 
       function makeResults(data) {
         const { analysis, session_id } = data;
-        const { ats, length, sections, overall_improvements, primary_path, parallel_paths, summary } =
-          analysis;
+        const {
+          ats, parseability, length, sections, bullet_rewrites, defensibility_flags,
+          cut_list, overall_improvements, primary_path, parallel_paths, summary,
+        } = analysis;
         const celebrate = ats.overall >= 80;
 
         // HERO
@@ -2148,7 +2317,7 @@
               : "Consider tightening — unjustified length dilutes impact."
           )
         );
-        const atsLength = el("div", { class: "grid two-col" }, atsCard, lengthCard);
+        const atsLength = el("div", { class: "grid two-col" }, atsCard, lengthCard, parseabilityCard(parseability));
 
         // SECTIONS
         const sectionsBlock = el(
@@ -2206,6 +2375,11 @@
           el("ul", { class: "notes" }, overall_improvements.map((imp) => el("li", null, imp)))
         );
 
+        // NEW: XYZ rewrites, defensibility, what-to-cut (any may be null/empty).
+        const rewritesBlock = bulletRewritesBlock(bullet_rewrites);
+        const defenseBlock = defensibilityBlock(defensibility_flags);
+        const cutSection = cutBlock(cut_list);
+
         // FEEDBACK
         const feedbackBlock = el(
           "section",
@@ -2219,13 +2393,18 @@
           el(
             "div",
             { class: "grid" },
-            hero,
-            atsLength,
-            sectionsBlock,
-            primaryBlock,
-            parallelBlock,
-            improvementsBlock,
-            feedbackBlock
+            ...[
+              hero,
+              atsLength,
+              sectionsBlock,
+              primaryBlock,
+              parallelBlock,
+              improvementsBlock,
+              rewritesBlock,
+              defenseBlock,
+              cutSection,
+              feedbackBlock,
+            ].filter(Boolean)
           ),
           makeChatDock(session_id)
         );

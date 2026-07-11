@@ -17,15 +17,17 @@ MESSAGE_LIMIT = 5 # limit the number of messages stored in a session to avoid ex
 def _key(session_id: str) -> str:
     return f"session:{session_id}"
 
-async def create_session(resume_text: str, analysis, kind: str = "review") -> str:
+async def create_session(resume_text: str, analysis, kind: str = "review", market: str = "india_modern") -> str:
     #store a new session in Redis with a unique session ID
     # `analysis` is a pydantic model (Analysis for review, FitAnalysis for fit);
     # its dump grounds the coach chat, which works for both flows.
+    # `market` is persisted so the coach chat stays specific to the same target market.
     session_id = uuid.uuid4().hex
     data = {
         "resume_text": resume_text,
         "analysis": analysis.model_dump(),
         "kind": kind,
+        "market": market,
         "message_count": 0,
         "history": [],
     }

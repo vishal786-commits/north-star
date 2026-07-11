@@ -10,6 +10,7 @@ from app.extractor import extract_resume
 from app.analyzer import analyze_resume, analyze_fit, chat_reply
 from app.ratelimit import enforce_daily_limit
 from app.session import create_session, get_session, save_session, MESSAGE_LIMIT
+from app.knowledge import MARKETS, DEFAULT_MARKET
 from app.schemas import (
     AnalyzeResponse,
     FitResponse,
@@ -24,14 +25,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _validate_market(market: str) -> str:
+    """Reject an unknown target market early. Returns the validated code."""
+    if market not in MARKETS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown market '{market}'. Choose one of: {', '.join(MARKETS)}.",
+        )
+    return market
+
+
 @router.post("/analyze", response_model=AnalyzeResponse,
              dependencies=[Depends(enforce_daily_limit)])
-async def analyze(file: UploadFile = File(...)):
+async def analyze(file: UploadFile = File(...), market: str = Form(DEFAULT_MARKET)):
     t0 = time.perf_counter()
 
-    # 1. Basic input validation — reject non-PDFs early.
+    # 1. Basic input validation — reject non-PDFs and unknown markets early.
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
+    market = _validate_market(market)
 
     # 2. Read the uploaded file into bytes, capping size to avoid memory blowups.
     pdf_bytes = await file.read()
@@ -53,21 +65,21 @@ async def analyze(file: UploadFile = File(...)):
 
     # 4. Analyze — this is async I/O (awaiting OpenAI), so we just await it.
     try:
-        analysis, meta = await analyze_resume(resume_text, page_count)
+        analysis, meta = await analyze_resume(resume_text, page_count, market)
     except AnalysisError as e:
-        await _record("review", "error", extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e))
+        await _record("review", "error", market=market, extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e))
         raise HTTPException(status_code=502, detail=str(e))
 
     # 5. Store the session so the chat endpoint can use it later.
     try:
-        session_id = await create_session(resume_text, analysis, kind="review")
+        session_id = await create_session(resume_text, analysis, kind="review", market=market)
     except SessionError as e:
-        await _record("review", "error", extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e), **meta)
+        await _record("review", "error", market=market, extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e), **meta)
         raise HTTPException(status_code=503, detail=str(e))
 
     # 6. Record metrics (best-effort) and return.
     await _record(
-        "review", "ok", session_id=session_id, page_count=page_count,
+        "review", "ok", session_id=session_id, market=market, page_count=page_count,
         resume_chars=len(resume_text), score=analysis.ats.overall,
         extract_ms=extract_ms, total_ms=_ms(t0), **meta,
     )
@@ -76,11 +88,13 @@ async def analyze(file: UploadFile = File(...)):
 
 @router.post("/fit", response_model=FitResponse,
              dependencies=[Depends(enforce_daily_limit)])
-async def fit(file: UploadFile = File(...), job_description: str = Form(...)):
+async def fit(file: UploadFile = File(...), job_description: str = Form(...),
+              market: str = Form(DEFAULT_MARKET)):
     t0 = time.perf_counter()
 
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
+    market = _validate_market(market)
 
     if not job_description or not job_description.strip():
         raise HTTPException(status_code=400, detail="Please paste the job description.")
@@ -107,19 +121,19 @@ async def fit(file: UploadFile = File(...), job_description: str = Form(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
     try:
-        fit_result, meta = await analyze_fit(resume_text, page_count, job_description)
+        fit_result, meta = await analyze_fit(resume_text, page_count, job_description, market)
     except AnalysisError as e:
-        await _record("fit", "error", extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e))
+        await _record("fit", "error", market=market, extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e))
         raise HTTPException(status_code=502, detail=str(e))
 
     try:
-        session_id = await create_session(resume_text, fit_result, kind="fit")
+        session_id = await create_session(resume_text, fit_result, kind="fit", market=market)
     except SessionError as e:
-        await _record("fit", "error", extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e), **meta)
+        await _record("fit", "error", market=market, extract_ms=extract_ms, total_ms=_ms(t0), error_detail=str(e), **meta)
         raise HTTPException(status_code=503, detail=str(e))
 
     await _record(
-        "fit", "ok", session_id=session_id, page_count=page_count,
+        "fit", "ok", session_id=session_id, market=market, page_count=page_count,
         resume_chars=len(resume_text), score=fit_result.match_score,
         extract_ms=extract_ms, total_ms=_ms(t0), **meta,
     )
@@ -142,10 +156,11 @@ async def chat(req: ChatRequest):
     if data["message_count"] >= MESSAGE_LIMIT:
         raise HTTPException(status_code=429, detail="Message limit reached for this session.")
 
-    # 3. Ask the coach — grounded in the resume + analysis + prior turns.
+    # 3. Ask the coach — grounded in the resume + analysis + prior turns + market.
     try:
         reply, meta = await chat_reply(
-            data["resume_text"], data["analysis"], data["history"], req.message
+            data["resume_text"], data["analysis"], data["history"], req.message,
+            data.get("market", DEFAULT_MARKET),
         )
     except AnalysisError as e:
         await _record("chat", "error", session_id=req.session_id, total_ms=_ms(t0), error_detail=str(e))

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.config import settings
 from app.schemas import Analysis, FitAnalysis
 from app.errors import AnalysisError
+from app import knowledge
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def _meta(response, llm_ms: float) -> dict:
     }
 
 
-SYSTEM_PROMPT = """You are an expert, honest career coach and resume analyst.
+_BASE_PHILOSOPHY = """You are an expert, honest career coach and resume analyst.
 
 Analyze resumes SECTION BY SECTION. Identify EVERY section present — standard
 ones (Education, Experience, Skills, Projects, etc.) AND any custom or unusual
@@ -56,18 +57,50 @@ framing back as fact.
 
 parallel_paths: ALWAYS provide EXACTLY 2 to 3 realistic parallel career paths.
 NEVER return an empty list. Each has discrete concrete requirements (a list of
-items, not one sentence) and effort_level of exactly "low", "medium", or "high".
+items, not one sentence) and effort_level of exactly "low", "medium", or "high"."""
 
-Assess length: one page is strongly preferred; more is appropriate only when
-justified by senior experience or genuinely dense, relevant content.
 
-Be concrete, realistic, and honest. Avoid generic filler. Base everything
-strictly on the actual resume content."""
+def _build_system_prompt(market: str) -> str:
+    """Compose the resume-review system prompt for a specific target market.
 
-async def analyze_resume(resume_text: str, page_count: int) -> tuple[Analysis, dict]:
+    The base philosophy is market-agnostic; the knowledge fragments and the
+    market guide situate the advice so it is specific to THIS market's norms
+    rather than generic. `market` is validated at the route layer, but we fall
+    back to the default guide defensively."""
+    guide = knowledge.MARKET_GUIDES.get(market, knowledge.MARKET_GUIDES[knowledge.DEFAULT_MARKET])
+    label = knowledge.MARKET_LABELS.get(market, knowledge.MARKET_LABELS[knowledge.DEFAULT_MARKET])
+    return f"""{_BASE_PHILOSOPHY}
+
+You are optimising this resume for {label}. Echo this exact market code back in the
+`market` field: "{market}". Apply the market rules below — they OVERRIDE the generic
+baselines where they conflict (e.g. length, what to cut, spelling, CV vs resume).
+
+{guide}
+
+{knowledge.RESUME_PRINCIPLES}
+
+{knowledge.PARSEABILITY_RULES}
+
+{knowledge.CUT_LIST}
+
+{knowledge.XYZ_RULE}
+
+{knowledge.DEFENSIBILITY_RULE}
+
+Populate `parseability`, `bullet_rewrites`, `defensibility_flags`, and `cut_list`
+accordingly. For `cut_list`, tune to the market: be aggressive for modern/UK/US
+markets, but for traditional Indian employers keep it minimal (their conventions,
+like a declaration or photo, may be expected — do not reflexively flag them).
+
+Be concrete, realistic, and honest. Avoid generic filler. Base everything strictly
+on the actual resume content."""
+
+
+async def analyze_resume(resume_text: str, page_count: int, market: str = knowledge.DEFAULT_MARKET) -> tuple[Analysis, dict]:
     """Analyze a resume. Returns (analysis, meta) where meta carries token
     usage + latency for the monitoring layer."""
     schema = json.dumps(Analysis.model_json_schema(), indent=2)
+    system_prompt = _build_system_prompt(market)
 
     user_prompt = f"""Analyze the resume below and strictly return only a JSON object that matches the
     schema provided. Do not include any markdown or commentary.
@@ -85,7 +118,7 @@ async def analyze_resume(resume_text: str, page_count: int) -> tuple[Analysis, d
                 model=MODEL,
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
             )
@@ -113,7 +146,7 @@ async def analyze_resume(resume_text: str, page_count: int) -> tuple[Analysis, d
     ) from last_error
 
 
-FIT_SYSTEM_PROMPT = """You are an expert, honest career coach assessing how well a candidate's
+_FIT_PHILOSOPHY = """You are an expert, honest career coach assessing how well a candidate's
 resume fits a SPECIFIC job. You are given the full resume text and a job description.
 
 CRITICAL — assess EVIDENCE, not keyword surface or self-description. A resume is a marketing
@@ -125,14 +158,33 @@ document; a job description is a wish list. Compare what the resume actually DEM
 - missing_requirements: job needs the resume does NOT demonstrate (be honest, don't pad).
 - gaps: concrete, closeable gaps between the candidate and the role.
 - tailoring_suggestions: specific ways to tailor THIS resume for THIS job (reframing real
-  experience, surfacing buried evidence, quantifying) — never fabricate experience.
+  experience, surfacing buried evidence, quantifying) — never fabricate experience."""
+
+
+def _build_fit_system_prompt(market: str) -> str:
+    """Compose the job-fit system prompt for a specific target market."""
+    guide = knowledge.MARKET_GUIDES.get(market, knowledge.MARKET_GUIDES[knowledge.DEFAULT_MARKET])
+    label = knowledge.MARKET_LABELS.get(market, knowledge.MARKET_LABELS[knowledge.DEFAULT_MARKET])
+    return f"""{_FIT_PHILOSOPHY}
+
+You are assessing this for {label}. Echo this exact market code back in the `market`
+field: "{market}". Mirror the job description's exact language where the resume genuinely
+supports it (spelled-out term + acronym once) — never keyword-stuff.
+
+{guide}
+
+{knowledge.XYZ_RULE}
+For fit, target the rewrites at bullets most relevant to THIS job — reframe real experience
+toward the role's language and surface buried, relevant evidence. Never fabricate.
 
 Be concrete, realistic, and honest. Avoid generic filler. Base everything strictly on the
 actual resume and job description."""
 
-async def analyze_fit(resume_text: str, page_count: int, job_description: str) -> tuple[FitAnalysis, dict]:
+
+async def analyze_fit(resume_text: str, page_count: int, job_description: str, market: str = knowledge.DEFAULT_MARKET) -> tuple[FitAnalysis, dict]:
     """Assess resume-to-job fit. Returns (fit, meta)."""
     schema = json.dumps(FitAnalysis.model_json_schema(), indent=2)
+    system_prompt = _build_fit_system_prompt(market)
 
     user_prompt = f"""Assess how well the resume fits the job below. Strictly return only a JSON
     object that matches the schema provided. Do not include any markdown or commentary.
@@ -153,7 +205,7 @@ async def analyze_fit(resume_text: str, page_count: int, job_description: str) -
                 model=MODEL,
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": FIT_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
             )
@@ -182,6 +234,9 @@ CHAT_SYSTEM_PROMPT = """You are North Star — an expert, honest career coach ch
 candidate about their resume. You have already analyzed their resume; both the full resume text
 and your structured analysis are provided below as grounding context.
 
+You are advising for {market_label}. Keep advice specific to that market's norms (length,
+CV vs resume, spelling, what belongs on the document and what to cut).
+
 Answer their questions specifically and concretely, drawing on THIS resume and analysis — never
 generic advice. Keep the same evidence-based honesty as the analysis: distinguish what the resume
 claims from what it demonstrates, and don't repeat aspirational framing back as fact. Be warm,
@@ -195,15 +250,18 @@ ANALYSIS (JSON):
 {analysis}"""
 
 
-async def chat_reply(resume_text: str, analysis: dict, history: list[dict], message: str) -> tuple[str, dict]:
+async def chat_reply(resume_text: str, analysis: dict, history: list[dict], message: str,
+                     market: str = knowledge.DEFAULT_MARKET) -> tuple[str, dict]:
     """Answer a follow-up question, grounded in the resume + prior analysis.
 
     Reuses the module-level AsyncOpenAI client. Plain-text (conversational) — unlike
     analyze_resume, this does NOT request a JSON object. Returns (reply, meta).
     """
+    market_label = knowledge.MARKET_LABELS.get(market, knowledge.MARKET_LABELS[knowledge.DEFAULT_MARKET])
     system_prompt = CHAT_SYSTEM_PROMPT.format(
         resume_text=resume_text,
         analysis=json.dumps(analysis),
+        market_label=market_label,
     )
     messages = (
         [{"role": "system", "content": system_prompt}]

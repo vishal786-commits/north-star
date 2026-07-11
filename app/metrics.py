@@ -45,6 +45,7 @@ def init_db() -> None:
                 created_at        REAL NOT NULL,
                 kind              TEXT NOT NULL,          -- review | fit | chat
                 session_id        TEXT,
+                market            TEXT,                   -- india_modern | india_traditional | uk | us_global
                 model             TEXT,
                 page_count        INTEGER,
                 resume_chars      INTEGER,
@@ -70,6 +71,11 @@ def init_db() -> None:
             );
             """
         )
+        # Additive migration for DBs created before the `market` column existed.
+        # CREATE TABLE IF NOT EXISTS won't add columns to a pre-existing table.
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(events)").fetchall()}
+        if "market" not in cols:
+            conn.execute("ALTER TABLE events ADD COLUMN market TEXT")
     logger.info("Metrics DB ready at %s", DB_PATH)
 
 
@@ -80,6 +86,7 @@ def record_event(
     kind: str,
     status: str,
     session_id: str | None = None,
+    market: str | None = None,
     model: str | None = None,
     page_count: int | None = None,
     resume_chars: int | None = None,
@@ -96,12 +103,12 @@ def record_event(
         with _connect() as conn:
             conn.execute(
                 """INSERT INTO events (
-                    created_at, kind, session_id, model, page_count, resume_chars,
+                    created_at, kind, session_id, market, model, page_count, resume_chars,
                     prompt_tokens, completion_tokens, total_tokens,
                     extract_ms, llm_ms, total_ms, score, status, error_detail
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    time.time(), kind, session_id, model, page_count, resume_chars,
+                    time.time(), kind, session_id, market, model, page_count, resume_chars,
                     prompt_tokens, completion_tokens, total_tokens,
                     extract_ms, llm_ms, total_ms, score, status, error_detail,
                 ),

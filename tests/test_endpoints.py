@@ -20,10 +20,10 @@ def client(monkeypatch):
     # No real PDF parsing or OpenAI calls.
     monkeypatch.setattr(routes, "extract_resume", lambda b: ("resume text", 1))
 
-    async def fake_analyze(text, pages):
+    async def fake_analyze(text, pages, market="india_modern"):
         return sample_analysis(), {"model": "test"}
 
-    async def fake_fit(text, pages, jd):
+    async def fake_fit(text, pages, jd, market="india_modern"):
         return sample_fit(), {"model": "test"}
 
     monkeypatch.setattr(routes, "analyze_resume", fake_analyze)
@@ -73,3 +73,25 @@ def test_overlong_job_description_rejected(client, monkeypatch):
     r = client.post("/api/fit", files={"file": PDF},
                     data={"job_description": "x" * 100})
     assert r.status_code == 413
+
+
+def test_analyze_accepts_market(client):
+    r = client.post("/api/analyze", files={"file": PDF}, data={"market": "uk"})
+    assert r.status_code == 200
+
+
+def test_analyze_defaults_market_when_omitted(client):
+    # No market field — the default applies and the request succeeds.
+    r = client.post("/api/analyze", files={"file": PDF})
+    assert r.status_code == 200
+
+
+def test_analyze_rejects_unknown_market(client):
+    r = client.post("/api/analyze", files={"file": PDF}, data={"market": "mars"})
+    assert r.status_code == 400
+
+
+def test_fit_rejects_unknown_market(client):
+    r = client.post("/api/fit", files={"file": PDF},
+                    data={"job_description": "a real job", "market": "atlantis"})
+    assert r.status_code == 400
