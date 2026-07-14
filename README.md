@@ -9,6 +9,7 @@
 [![Redis](https://img.shields.io/badge/Redis-sessions-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-analysis-412991?logo=openai&logoColor=white)](https://openai.com/)
 [![Docker](https://img.shields.io/badge/Docker-single%20image-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/fargate/)
 
 </div>
 
@@ -64,7 +65,8 @@ The whole thing ships as **one FastAPI service**: the API lives under `/api`, an
 
 **Infra**
 - **Docker** — a single `python:3.13-slim` image running Uvicorn (no Node stage, no nginx)
-- **AWS ECS Fargate** target *(deployment in progress)*
+- **AWS ECS Fargate** (Express Mode) behind an **Application Load Balancer** — *deployed and live*
+- **Redis Cloud** for session state; **SQLite** on a mounted volume for metrics
 
 ## Engineering decisions worth calling out
 
@@ -132,6 +134,21 @@ docker run -p 8000:8000 --env-file .env north-star
 ```
 
 Then open `http://127.0.0.1:8000/`.
+
+## Deployment (AWS)
+
+North Star runs on **AWS ECS Fargate** (Express Mode), which provisions the service and an
+**Application Load Balancer** from the container image. The image is built from the single
+`Dockerfile`, pushed to **Amazon ECR**, and served by Uvicorn with `--proxy-headers` so the ALB's
+`X-Forwarded-For` is trusted for real-client IP resolution.
+
+- **Sessions** — external **Redis Cloud** via `REDIS_URL` (no in-cluster Redis to manage).
+- **Metrics** — SQLite on the container's `/app/data` volume (single-instance; scaling past one task
+  requires moving metrics to a shared store).
+- **Config** — `OPENAI_API_KEY`, `REDIS_URL`, and `ADMIN_TOKEN` are injected as task environment /
+  secrets, never baked into the image (`.dockerignore` excludes `.env`, `data/`, and local state).
+- **Proxy** — set `TRUSTED_PROXY_HOPS=1` for a single ALB so the per-IP rate limit attributes to the
+  real client rather than a spoofable header.
 
 ## Testing
 
@@ -207,8 +224,8 @@ North Star is **actively in development** — built in public.
 - [x] Abuse guardrails — per-IP daily rate limit, upload/JD/message caps, PDF-only validation
 - [x] Test suite — rate-limiter + endpoint guardrail tests (pytest, fakeredis)
 - [x] Single-container Docker image
-- [ ] AWS ECS Fargate deployment
-- [ ] Live demo
+- [x] AWS ECS Fargate deployment — live behind an Application Load Balancer
+- [ ] Public live demo link
 
 ---
 
