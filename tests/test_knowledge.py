@@ -1,6 +1,6 @@
 """Knowledge module + market-aware prompt builders (no LLM calls)."""
 from app import knowledge
-from app.analyzer import _build_system_prompt, _build_fit_system_prompt
+from app.analyzer import _build_fit_system_prompt, _build_system_prompt
 
 
 def test_all_markets_have_guides_and_labels():

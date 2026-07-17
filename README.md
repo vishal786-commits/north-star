@@ -149,6 +149,76 @@ North Star runs on **AWS ECS Fargate** (Express Mode), which provisions the serv
   secrets, never baked into the image (`.dockerignore` excludes `.env`, `data/`, and local state).
 - **Proxy** — set `TRUSTED_PROXY_HOPS=1` for a single ALB so the per-IP rate limit attributes to the
   real client rather than a spoofable header.
+- **Health checks** — point the ALB target group at `GET /ready` (verifies Redis) and keep `GET /health`
+  for cheap liveness. The container also has a Docker `HEALTHCHECK` hitting `/health`.
+
+## CI/CD (GitHub Actions)
+
+Two workflows live in `.github/workflows/`:
+
+- **`ci.yml`** — on every pull request and push: installs deps, runs `ruff check` and `pytest`. The
+  suite fakes Redis and OpenAI, so no secrets are needed.
+- **`deploy.yml`** — on push to `master`: re-runs lint + tests, then (via **GitHub OIDC**, no stored
+  AWS keys) logs in to ECR, builds and pushes the image tagged with the commit SHA (and `latest`),
+  fetches the live ECS task definition, swaps in the new image, and updates the service — waiting for
+  it to reach stability.
+
+**One-time AWS setup** (console or CLI):
+
+1. Create the GitHub OIDC identity provider in IAM (`token.actions.githubusercontent.com`,
+   audience `sts.amazonaws.com`).
+2. Create an IAM role whose trust policy allows this repo/branch to assume it via that provider, with
+   permissions for: `ecr:GetAuthorizationToken` + image push/pull, `ecs:DescribeTaskDefinition`,
+   `ecs:RegisterTaskDefinition`, `ecs:UpdateService`, `ecs:DescribeServices`, and `iam:PassRole` for
+   the task's execution/task roles.
+
+**GitHub → Settings → Secrets and variables → Actions → Variables** (all non-secret):
+
+| Variable | Example |
+|---|---|
+| `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/north-star-deploy` |
+| `AWS_REGION` | `ap-south-1` |
+| `ECR_REPOSITORY` | `north-star` |
+| `ECS_CLUSTER` | `north-star-cluster` |
+| `ECS_SERVICE` | `north-star-service` |
+| `ECS_TASK_FAMILY` | `north-star` |
+| `ECS_CONTAINER_NAME` | `north-star` |
+
+## Observability (AWS CloudWatch)
+
+The app is instrumented to feed CloudWatch **without any AWS SDK or IAM in the request path**:
+
+- **Structured logs** — `app/logging_config.py` emits single-line JSON to stdout with a per-request
+  `request_id` (set by a middleware in `app/main.py`, echoed on the `X-Request-ID` response header).
+  In ECS the awslogs driver ships these to CloudWatch Logs, queryable in Logs Insights.
+- **Metrics via EMF** — `app/observability.py` prints one CloudWatch [Embedded Metric Format](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Embedded_Metric_Format.html)
+  line per request (namespace **`NorthStar`**). CloudWatch auto-extracts `RequestCount`, `ErrorCount`,
+  `LatencyTotalMs`, `LatencyLlmMs`, `ExtractMs`, token counts, and `EstCostUsd` — as a fleet aggregate
+  and sliced by endpoint (`Kind` = review/fit/chat). Emission is wired once inside
+  `metrics.record_event`, so every recorded event publishes automatically.
+- **Dashboard + alarms (IaC)** — `infra/cloudwatch.yaml` (CloudFormation) provisions a `north-star`
+  dashboard (app metrics + ALB + ECS widgets) and alarms (error count, latency p95, ALB 5xx, unhealthy
+  hosts, ECS CPU) that notify an SNS email subscription.
+
+Deploy the monitoring stack:
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudwatch.yaml \
+  --stack-name north-star-observability \
+  --parameter-overrides \
+    AlarmEmail=you@example.com \
+    ClusterName=<cluster> ServiceName=<service> \
+    LoadBalancerFullName=app/<alb-name>/<id> \
+    TargetGroupFullName=targetgroup/<tg-name>/<id>
+```
+
+Enable ECS Container Insights once so the CPU/memory widgets populate:
+
+```bash
+aws ecs update-cluster-settings --cluster <cluster> \
+  --settings name=containerInsights,value=enabled
+```
 
 ## Testing
 
@@ -158,11 +228,14 @@ dependencies (kept out of the runtime `requirements.txt`) first:
 ```bash
 pip install -r requirements-dev.txt
 pytest
+ruff check app tests   # lint (same check CI runs)
 ```
 
 It covers the rate limiter (daily budgeting, fail-open on Redis errors, `X-Forwarded-For` hop
-resolution) in `tests/test_ratelimit.py`, and the endpoint input guardrails (size caps, PDF-only,
-length limits, shared daily cap across `/analyze` + `/fit`) in `tests/test_endpoints.py`.
+resolution) in `tests/test_ratelimit.py`, the endpoint input guardrails (size caps, PDF-only,
+length limits, shared daily cap across `/analyze` + `/fit`) in `tests/test_endpoints.py`, the EMF
+metric shape in `tests/test_observability.py`, and liveness/readiness + request-ID correlation in
+`tests/test_health.py`.
 
 ## API reference
 
@@ -173,7 +246,8 @@ length limits, shared daily cap across `/analyze` + `/fit`) in `tests/test_endpo
 | `POST /api/chat` | JSON `{ session_id, message }` | `{ reply, messages_remaining, limit_reached }` |
 | `POST /api/feedback` | JSON `{ session_id, rating, comment? }` (`rating`: `up`\|`down`) | `{ status }` |
 | `GET /api/metrics` | query `?token=` or header `X-Admin-Token` | aggregate monitoring JSON |
-| `GET /health` | — | `{ "status": "ok" }` |
+| `GET /health` | — | `{ "status": "ok" }` (liveness — process is up) |
+| `GET /ready` | — | `{ "status": "ready" }`, or `503` if Redis is unreachable (readiness) |
 
 **Notes**
 - Sessions are stored in Redis and expire after **1 hour** of inactivity.
@@ -189,13 +263,15 @@ length limits, shared daily cap across `/analyze` + `/fit`) in `tests/test_endpo
 ```
 north-star/
 ├── app/                     # FastAPI backend
-│   ├── main.py              # app wiring: /api router + static mount
+│   ├── main.py              # app wiring: lifespan, request-id middleware, /health + /ready, static mount
 │   ├── config.py            # typed settings from .env
 │   ├── schemas.py           # Pydantic data contracts
 │   ├── extractor.py         # PDF → text + page count
 │   ├── analyzer.py          # OpenAI analysis + fit + chat, schema validation
 │   ├── session.py           # Redis session layer + message limit
-│   ├── metrics.py           # durable SQLite metrics + feedback store
+│   ├── metrics.py           # durable SQLite metrics + feedback store (also emits EMF)
+│   ├── observability.py     # CloudWatch EMF metric emission (stdout, no SDK)
+│   ├── logging_config.py    # structured JSON logging + request-id contextvar
 │   ├── ratelimit.py         # per-IP daily rate limiter (Redis, fail-open)
 │   ├── routes.py            # endpoints + rate-limit dependency wiring
 │   └── errors.py            # custom exception types
@@ -205,9 +281,17 @@ north-star/
 ├── tests/
 │   ├── test_endpoints.py    # endpoint guardrails (faked Redis + OpenAI)
 │   ├── test_ratelimit.py    # rate-limiter unit tests
+│   ├── test_observability.py # EMF metric shape
+│   ├── test_health.py       # liveness/readiness + request-id
 │   └── conftest.py          # shared fixtures / sample payloads
+├── infra/
+│   └── cloudwatch.yaml      # CloudFormation: dashboard + alarms + SNS
+├── .github/workflows/
+│   ├── ci.yml               # lint + test on PR/push
+│   └── deploy.yml           # build → ECR → ECS deploy (OIDC) on master
+├── pyproject.toml           # ruff config
 ├── pytest.ini
-├── Dockerfile               # single-image build
+├── Dockerfile               # single-image build (+ HEALTHCHECK)
 └── requirements.txt
 ```
 

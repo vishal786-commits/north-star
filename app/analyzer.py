@@ -5,10 +5,10 @@ import time
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from app.config import settings
-from app.schemas import Analysis, FitAnalysis
-from app.errors import AnalysisError
 from app import knowledge
+from app.config import settings
+from app.errors import AnalysisError
+from app.schemas import Analysis, FitAnalysis
 
 logger = logging.getLogger(__name__)
 

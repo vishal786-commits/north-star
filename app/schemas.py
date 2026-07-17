@@ -1,4 +1,5 @@
 from typing import Literal
+
 from pydantic import BaseModel, Field
 
 # Target market the resume is being optimised for. Drives length rules, what-to-cut,

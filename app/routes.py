@@ -2,23 +2,23 @@ import asyncio
 import logging
 import time
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Header, Depends
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 
 from app import metrics
+from app.analyzer import analyze_fit, analyze_resume, chat_reply
 from app.config import settings
+from app.errors import AnalysisError, ExtractionError, SessionError, SessionNotFound
 from app.extractor import extract_resume
-from app.analyzer import analyze_resume, analyze_fit, chat_reply
+from app.knowledge import DEFAULT_MARKET, MARKETS
 from app.ratelimit import enforce_daily_limit
-from app.session import create_session, get_session, save_session, MESSAGE_LIMIT
-from app.knowledge import MARKETS, DEFAULT_MARKET
 from app.schemas import (
     AnalyzeResponse,
-    FitResponse,
     ChatRequest,
     ChatResponse,
     FeedbackRequest,
+    FitResponse,
 )
-from app.errors import ExtractionError, AnalysisError, SessionError, SessionNotFound
+from app.session import MESSAGE_LIMIT, create_session, get_session, save_session
 
 logger = logging.getLogger(__name__)
 
