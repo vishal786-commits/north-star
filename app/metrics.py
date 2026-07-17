@@ -15,6 +15,7 @@ import time
 from contextlib import contextmanager
 
 from app.config import settings
+from app.observability import emit_emf
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,21 @@ def record_event(
             )
     except Exception:
         logger.exception("Failed to record metrics event (non-fatal)")
+
+    # Also publish this event to CloudWatch via EMF (best-effort, isolated from
+    # the SQLite write so either can fail without affecting the other).
+    emit_emf(
+        kind=kind,
+        status=status,
+        market=market,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        extract_ms=extract_ms,
+        llm_ms=llm_ms,
+        total_ms=total_ms,
+    )
 
 
 def record_feedback(*, session_id: str, rating: str, comment: str | None) -> None:

@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  North Star observability — CloudWatch dashboard + alarms fed by the app's EMF
+  metrics (NorthStar namespace), the ALB, and ECS. Alarms notify an SNS topic
+  with an email subscription. Deploy:
+    aws cloudformation deploy \
+      --template-file infra/cloudwatch.yaml \
+      --stack-name north-star-observability \
+      --parameter-overrides \
+        AlarmEmail=you@example.com \
+        ClusterName=<cluster> ServiceName=<service> \
+        LoadBalancerFullName=app/<alb-name>/<id> \
+        TargetGroupFullName=targetgroup/<tg-name>/<id>
+
+Parameters:
+  AlarmEmail:
+    Type: String
+    Description: Email address to receive alarm notifications (confirm the SNS subscription email).
+  ClusterName:
+    Type: String
+    Description: ECS cluster name.
+  ServiceName:
+    Type: String
+    Description: ECS service name.
+  LoadBalancerFullName:
+    Type: String
+    Description: ALB full name for CloudWatch dimensions, e.g. app/my-alb/1234567890abcdef.
+  TargetGroupFullName:
+    Type: String
+    Description: Target group full name, e.g. targetgroup/my-tg/1234567890abcdef.
+  ErrorCountThreshold:
+    Type: Number
+    Default: 5
+    Description: Alarm when total app errors in 5 minutes meets/exceeds this.
+  LatencyP95ThresholdMs:
+    Type: Number
+    Default: 15000
+    Description: Alarm when app total-latency p95 (ms) meets/exceeds this.
+  Alb5xxThreshold:
+    Type: Number
+    Default: 5
+    Description: Alarm when ALB target 5xx count in 5 minutes meets/exceeds this.
+  CpuHighThreshold:
+    Type: Number
+    Default: 85
+    Description: Alarm when ECS service CPU utilization (%) meets/exceeds this.
+
+Resources:
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: north-star-alarms
+      DisplayName: North Star Alarms
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+      TopicArn: !Ref AlarmTopic
+
+  # --- Alarms -------------------------------------------------------------
+
+  HighErrorCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: north-star-high-error-count
+      AlarmDescription: App-level errors (NorthStar EMF ErrorCount) are elevated.
+      Namespace: NorthStar
+      MetricName: ErrorCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ErrorCountThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: north-star-high-latency-p95
+      AlarmDescription: Request total-latency p95 is high (NorthStar EMF LatencyTotalMs).
+      Namespace: NorthStar
+      MetricName: LatencyTotalMs
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref LatencyP95ThresholdMs
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  Alb5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: north-star-alb-5xx
+      AlarmDescription: ALB is returning target 5xx responses.
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref Alb5xxThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref LoadBalancerFullName
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  UnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: north-star-unhealthy-hosts
+      AlarmDescription: One or more ALB targets are failing health checks.
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !Ref TargetGroupFullName
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  EcsCpuHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: north-star-ecs-cpu-high
+      AlarmDescription: ECS service CPU utilization is high.
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: !Ref CpuHighThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref ClusterName
+        - Name: ServiceName
+          Value: !Ref ServiceName
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  # --- Dashboard ----------------------------------------------------------
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: north-star
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Requests & errors (all endpoints)",
+                "region": "${AWS::Region}",
+                "stat": "Sum", "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "NorthStar", "RequestCount" ],
+                  [ "NorthStar", "ErrorCount" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Latency p95 (ms)",
+                "region": "${AWS::Region}",
+                "stat": "p95", "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "NorthStar", "LatencyTotalMs" ],
+                  [ "NorthStar", "LatencyLlmMs" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Requests by endpoint",
+                "region": "${AWS::Region}",
+                "stat": "Sum", "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "NorthStar", "RequestCount", "Kind", "review" ],
+                  [ "NorthStar", "RequestCount", "Kind", "fit" ],
+                  [ "NorthStar", "RequestCount", "Kind", "chat" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "OpenAI tokens & estimated cost (USD)",
+                "region": "${AWS::Region}",
+                "stat": "Sum", "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "NorthStar", "TotalTokens" ],
+                  [ "NorthStar", "EstCostUsd", { "yAxis": "right" } ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "ALB — requests, 5xx, latency",
+                "region": "${AWS::Region}",
+                "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${LoadBalancerFullName}", { "stat": "Sum" } ],
+                  [ "AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "${LoadBalancerFullName}", { "stat": "Sum" } ],
+                  [ "AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${LoadBalancerFullName}", { "stat": "p95", "yAxis": "right" } ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "ECS — CPU & memory",
+                "region": "${AWS::Region}",
+                "stat": "Average", "period": 300, "view": "timeSeries",
+                "metrics": [
+                  [ "AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}" ],
+                  [ "AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}" ]
+                ]
+              }
+            }
+          ]
+        }
+
+Outputs:
+  AlarmTopicArn:
+    Description: SNS topic that receives alarm notifications.
+    Value: !Ref AlarmTopic
+  DashboardName:
+    Description: CloudWatch dashboard name.
+    Value: !Ref Dashboard

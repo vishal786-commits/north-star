@@ -1,0 +1,11 @@
+[tool.ruff]
+# Conservative ruleset so CI is a useful gate without churning existing style.
+line-length = 120
+target-version = "py313"
+extend-exclude = ["venv", "data"]
+
+[tool.ruff.lint]
+# E/F = pyflakes + pycodestyle errors, I = import sorting.
+select = ["E", "F", "I"]
+# The static frontend and generous line lengths in prompts don't need E501 noise.
+ignore = ["E501"]

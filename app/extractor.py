@@ -1,5 +1,7 @@
 import logging
+
 import fitz  # PyMuPDF
+
 from app.errors import ExtractionError
 
 logger = logging.getLogger(__name__)

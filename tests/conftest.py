@@ -12,14 +12,14 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 from app.schemas import (  # noqa: E402  (import after env is set)
     Analysis,
     ATSScore,
-    Parseability,
-    LengthAssessment,
-    CareerPath,
-    ParallelPath,
     BulletRewrite,
-    DefensibilityFlag,
+    CareerPath,
     CutItem,
+    DefensibilityFlag,
     FitAnalysis,
+    LengthAssessment,
+    ParallelPath,
+    Parseability,
 )
 
 

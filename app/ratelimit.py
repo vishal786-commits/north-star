@@ -9,10 +9,10 @@ import logging
 from datetime import datetime, timezone
 
 import redis.asyncio as redis
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 
 from app.config import settings
-from app.session import redis_client   # reuse the existing async client
+from app.session import redis_client  # reuse the existing async client
 
 logger = logging.getLogger(__name__)
 
