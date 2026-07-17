@@ -68,7 +68,7 @@ jobs:
         run: |
           aws ecs describe-task-definition --task-definition "$TASK_FAMILY" \
             --query 'taskDefinition' --output json \
-            | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .enableFaultInjection)' \
             > task-definition.json
 
       - name: Render new image into task definition
