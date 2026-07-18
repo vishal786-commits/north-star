@@ -5,3 +5,4 @@ pytest-asyncio
 fakeredis
 httpx
 ruff
+aiosqlite==0.20.0   # in-memory async DB for offline app.db tests (no Postgres needed)

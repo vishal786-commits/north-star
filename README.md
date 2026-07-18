@@ -7,6 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Redis](https://img.shields.io/badge/Redis-sessions-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-RDS-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-analysis-412991?logo=openai&logoColor=white)](https://openai.com/)
 [![Docker](https://img.shields.io/badge/Docker-single%20image-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/fargate/)
@@ -28,6 +29,7 @@ Upload a resume (PDF) and North Star returns a structured, section-aware analysi
 - **Job Fit** — paste a specific job description and get an honest, evidence-based match score, what lines up vs. what's missing, gaps to close, and concrete ways to tailor the resume for *that* role.
 - **Coaching chat** — a follow-up conversation about your analysis (or job fit), grounded in your resume and its scores, with a per-session message limit enforced by the server.
 - **Monitoring & feedback** — every request is recorded to a durable SQLite store (latency, token usage, scores, errors), a 👍/👎 widget captures result quality, and a `/metrics.html` dashboard surfaces the aggregates.
+- **Permanent LLM datastore** — every successful review / fit / chat is also persisted to **Amazon RDS PostgreSQL** (`llm_interactions`: the full response JSON, prompt version, model, tokens, latency, and the user's rating) — the durable substrate for prompt evals, regression testing, failure analysis, and cost/model analytics. Writes are fire-and-forget: a DB hiccup never delays or breaks the user's response.
 - **Abuse & cost guardrails** — a per-IP daily request cap, upload-size / job-description / message length limits, and PDF-only validation, so the OpenAI spend and the service stay bounded under real traffic.
 
 ## Architecture
@@ -55,7 +57,8 @@ The whole thing ships as **one FastAPI service**: the API lives under `/api`, an
 - **Pydantic v2** for typed, validated data contracts; **pydantic-settings** for config
 - **PyMuPDF** for PDF text extraction
 - **OpenAI** (`gpt-4o-mini`) for analysis and chat
-- **Redis** (async client) for session state
+- **Redis** (async client) for session state (temporary: sessions, chat history, rate-limit counters)
+- **SQLAlchemy 2.0 (async) + asyncpg + Alembic** over **Amazon RDS PostgreSQL** for the permanent LLM-interaction datastore
 
 **Frontend**
 - A single **vanilla HTML/CSS/JS** file (`static/index.html`) — **no framework, no build step, no npm**
@@ -66,7 +69,7 @@ The whole thing ships as **one FastAPI service**: the API lives under `/api`, an
 **Infra**
 - **Docker** — a single `python:3.13-slim` image running Uvicorn (no Node stage, no nginx)
 - **AWS ECS Fargate** (Express Mode) behind an **Application Load Balancer** — *deployed and live*
-- **Redis Cloud** for session state; **SQLite** on a mounted volume for metrics
+- **Redis Cloud** for session state; **SQLite** on a mounted volume for live dashboard metrics; **Amazon RDS PostgreSQL** as the permanent LLM-interaction store
 
 ## Engineering decisions worth calling out
 
@@ -104,6 +107,10 @@ Create a `.env` in the project root:
 OPENAI_API_KEY=sk-your-key
 REDIS_URL=redis://default:password@host:port   # or redis://localhost:6379
 
+# Optional — permanent datastore (Amazon RDS PostgreSQL)
+# Unset → the DB layer no-ops and the app runs without Postgres. Must use asyncpg:
+# DATABASE_URL=postgresql+asyncpg://user:password@host:5432/northstar
+
 # Optional — monitoring
 METRICS_DB_PATH=data/metrics.db   # durable SQLite store (default shown)
 ADMIN_TOKEN=some-long-secret      # guards GET /api/metrics + /metrics.html; if unset, the dashboard is open
@@ -126,6 +133,19 @@ uvicorn app.main:app --reload
 - Interactive API docs: `http://127.0.0.1:8000/docs`
 - Health check: `http://127.0.0.1:8000/health`
 
+### Database migrations (optional — only if using Postgres)
+
+The permanent datastore schema is managed by **Alembic**. With `DATABASE_URL` set, create the
+`llm_interactions` table:
+
+```bash
+alembic upgrade head          # apply all migrations
+alembic downgrade -1          # roll back the last one
+alembic revision --autogenerate -m "add a column"   # after editing app/db/models.py
+```
+
+Without `DATABASE_URL`, the app skips Postgres entirely — no migrations needed to run locally.
+
 ### Run with Docker
 
 ```bash
@@ -133,7 +153,8 @@ docker build -t north-star .
 docker run -p 8000:8000 --env-file .env north-star
 ```
 
-Then open `http://127.0.0.1:8000/`.
+Then open `http://127.0.0.1:8000/`. On boot the container runs `alembic upgrade head`
+automatically (via `docker-entrypoint.sh`) when `DATABASE_URL` is set, then starts Uvicorn.
 
 ## Deployment (AWS)
 
@@ -143,10 +164,15 @@ North Star runs on **AWS ECS Fargate** (Express Mode), which provisions the serv
 `X-Forwarded-For` is trusted for real-client IP resolution.
 
 - **Sessions** — external **Redis Cloud** via `REDIS_URL` (no in-cluster Redis to manage).
-- **Metrics** — SQLite on the container's `/app/data` volume (single-instance; scaling past one task
-  requires moving metrics to a shared store).
-- **Config** — `OPENAI_API_KEY`, `REDIS_URL`, and `ADMIN_TOKEN` are injected as task environment /
-  secrets, never baked into the image (`.dockerignore` excludes `.env`, `data/`, and local state).
+- **Permanent store** — **Amazon RDS PostgreSQL** via `DATABASE_URL` (`postgresql+asyncpg://…`), in the
+  **same VPC** as the ECS service, with the RDS security group allowing the task's SG on 5432. Migrations
+  run automatically on container start (`alembic upgrade head` in the entrypoint). This is the durable
+  home for LLM interactions — unlike the SQLite metrics file, it survives redeploys.
+- **Metrics** — SQLite on the container's `/app/data` volume (single-instance, live dashboard only;
+  **wiped on redeploy** since the disk is ephemeral — durable analytics live in RDS).
+- **Config** — `OPENAI_API_KEY`, `REDIS_URL`, `DATABASE_URL`, and `ADMIN_TOKEN` are injected as task
+  environment / secrets, never baked into the image (`.dockerignore` excludes `.env`, `data/`, and local
+  state).
 - **Proxy** — set `TRUSTED_PROXY_HOPS=1` for a single ALB so the per-IP rate limit attributes to the
   real client rather than a spoofable header.
 - **Health checks** — point the ALB target group at `GET /ready` (verifies Redis) and keep `GET /health`
@@ -234,8 +260,9 @@ ruff check app tests   # lint (same check CI runs)
 It covers the rate limiter (daily budgeting, fail-open on Redis errors, `X-Forwarded-For` hop
 resolution) in `tests/test_ratelimit.py`, the endpoint input guardrails (size caps, PDF-only,
 length limits, shared daily cap across `/analyze` + `/fit`) in `tests/test_endpoints.py`, the EMF
-metric shape in `tests/test_observability.py`, and liveness/readiness + request-ID correlation in
-`tests/test_health.py`.
+metric shape in `tests/test_observability.py`, liveness/readiness + request-ID correlation in
+`tests/test_health.py`, and the permanent datastore layer (insert, feedback update, disabled-DB no-op)
+in `tests/test_db.py` — which runs against in-memory SQLite, so no Postgres is needed to test it.
 
 ## API reference
 
@@ -269,6 +296,10 @@ north-star/
 │   ├── extractor.py         # PDF → text + page count
 │   ├── analyzer.py          # OpenAI analysis + fit + chat, schema validation
 │   ├── session.py           # Redis session layer + message limit
+│   ├── db/                  # permanent datastore (Amazon RDS PostgreSQL)
+│   │   ├── engine.py        # async SQLAlchemy engine + session factory (optional/no-op if unset)
+│   │   ├── models.py        # LLMInteraction ORM model
+│   │   └── crud.py          # best-effort record_interaction + update_feedback
 │   ├── metrics.py           # durable SQLite metrics + feedback store (also emits EMF)
 │   ├── observability.py     # CloudWatch EMF metric emission (stdout, no SDK)
 │   ├── logging_config.py    # structured JSON logging + request-id contextvar
@@ -284,6 +315,8 @@ north-star/
 │   ├── test_observability.py # EMF metric shape
 │   ├── test_health.py       # liveness/readiness + request-id
 │   └── conftest.py          # shared fixtures / sample payloads
+├── migrations/              # Alembic (async): env.py + versions/ (llm_interactions schema)
+├── alembic.ini              # Alembic config (URL read from DATABASE_URL, not here)
 ├── infra/
 │   └── cloudwatch.yaml      # CloudFormation: dashboard + alarms + SNS
 ├── .github/workflows/
@@ -291,6 +324,7 @@ north-star/
 │   └── deploy.yml           # build → ECR → ECS deploy (OIDC) on master
 ├── pyproject.toml           # ruff config
 ├── pytest.ini
+├── docker-entrypoint.sh     # runs `alembic upgrade head` then uvicorn
 ├── Dockerfile               # single-image build (+ HEALTHCHECK)
 └── requirements.txt
 ```

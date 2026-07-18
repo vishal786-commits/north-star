@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
-from app import session
+from app import db, session
 from app.logging_config import request_id_var, setup_logging
 from app.metrics import init_db
 from app.routes import router
@@ -25,7 +25,17 @@ async def lifespan(app: FastAPI):
         logger.info("Redis reachable at startup")
     except Exception:
         logger.warning("Redis ping failed at startup — sessions/rate-limit degraded", exc_info=True)
+    # Ping Postgres too, if configured. Analytics persistence is non-critical to
+    # serving requests, so warn but never crash — same policy as Redis.
+    try:
+        await db.ping()
+        if db.db_enabled:
+            logger.info("Postgres reachable at startup")
+    except Exception:
+        logger.warning("Postgres ping failed at startup — analytics persistence degraded", exc_info=True)
     yield
+    # Shutdown: close the Postgres pool cleanly.
+    await db.dispose()
 
 
 app = FastAPI(title="North Star", lifespan=lifespan)

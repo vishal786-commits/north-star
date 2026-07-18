@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings or they break inside the Linux container
+# (a trailing \r turns "alembic upgrade head" into "alembic upgrade head\r").
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf

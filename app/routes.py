@@ -4,12 +4,20 @@ import time
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 
-from app import metrics
-from app.analyzer import analyze_fit, analyze_resume, chat_reply
+from app import db, metrics
+from app.analyzer import (
+    CHAT_PROMPT_VERSION,
+    FIT_PROMPT_VERSION,
+    RESUME_PROMPT_VERSION,
+    analyze_fit,
+    analyze_resume,
+    chat_reply,
+)
 from app.config import settings
 from app.errors import AnalysisError, ExtractionError, SessionError, SessionNotFound
 from app.extractor import extract_resume
 from app.knowledge import DEFAULT_MARKET, MARKETS
+from app.logging_config import request_id_var
 from app.ratelimit import enforce_daily_limit
 from app.schemas import (
     AnalyzeResponse,
@@ -83,6 +91,11 @@ async def analyze(file: UploadFile = File(...), market: str = Form(DEFAULT_MARKE
         resume_chars=len(resume_text), score=analysis.ats.overall,
         extract_ms=extract_ms, total_ms=_ms(t0), **meta,
     )
+    _persist(
+        "review", prompt_version=RESUME_PROMPT_VERSION, session_id=session_id,
+        resume_text=resume_text, job_description=None,
+        response_json=analysis.model_dump(mode="json"), meta=meta,
+    )
     return AnalyzeResponse(session_id=session_id, analysis=analysis)
 
 
@@ -137,6 +150,11 @@ async def fit(file: UploadFile = File(...), job_description: str = Form(...),
         resume_chars=len(resume_text), score=fit_result.match_score,
         extract_ms=extract_ms, total_ms=_ms(t0), **meta,
     )
+    _persist(
+        "fit", prompt_version=FIT_PROMPT_VERSION, session_id=session_id,
+        resume_text=resume_text, job_description=job_description,
+        response_json=fit_result.model_dump(mode="json"), meta=meta,
+    )
     return FitResponse(session_id=session_id, fit=fit_result)
 
 
@@ -176,6 +194,11 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=503, detail=str(e))
 
     await _record("chat", "ok", session_id=req.session_id, total_ms=_ms(t0), **meta)
+    _persist(
+        "chat", prompt_version=CHAT_PROMPT_VERSION, session_id=req.session_id,
+        resume_text=data["resume_text"], job_description=None,
+        response_json={"message": req.message, "reply": reply}, meta=meta,
+    )
 
     # 5. Report how many messages remain.
     remaining = max(0, MESSAGE_LIMIT - data["message_count"])
@@ -191,6 +214,11 @@ async def feedback(req: FeedbackRequest):
         rating=req.rating,
         comment=req.comment,
     )
+    # Also attach the rating to the durable interaction row (best-effort, off-path).
+    if db.db_enabled:
+        _spawn(db.update_feedback(
+            session_id=req.session_id, rating=req.rating, comment=req.comment,
+        ))
     return {"status": "ok"}
 
 
@@ -219,3 +247,50 @@ async def _record(kind: str, status: str, **fields) -> None:
         await asyncio.to_thread(metrics.record_event, kind=kind, status=status, **fields)
     except Exception:
         logger.exception("metrics record failed (non-fatal)")
+
+
+# Internal event kind → the DB-facing feature name the user asked for.
+_FEATURE = {"review": "resume_review", "fit": "job_fit", "chat": "chat"}
+
+# Hold references to fire-and-forget tasks so they aren't garbage-collected
+# mid-flight (per asyncio.create_task docs).
+_bg_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> None:
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
+def _persist(
+    kind: str,
+    *,
+    prompt_version: str,
+    session_id: str | None,
+    resume_text: str | None,
+    job_description: str | None,
+    response_json: dict,
+    meta: dict,
+) -> None:
+    """Fire-and-forget the durable Postgres write for a successful interaction.
+
+    Scheduled after the response is computed, so it adds ZERO latency and can
+    never raise into the handler (crud swallows all errors). No-op when the DB
+    is disabled.
+    """
+    if not db.db_enabled:
+        return
+    _spawn(db.record_interaction(
+        feature=_FEATURE.get(kind, kind),
+        session_id=session_id,
+        resume_text=resume_text,
+        job_description=job_description,
+        model=meta.get("model"),
+        prompt_version=prompt_version,
+        response_json=response_json,
+        input_tokens=meta.get("prompt_tokens"),
+        output_tokens=meta.get("completion_tokens"),
+        latency_ms=meta.get("llm_ms"),
+        request_id=request_id_var.get(),
+    ))
