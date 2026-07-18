@@ -34,19 +34,13 @@ Upload a resume (PDF) and North Star returns a structured, section-aware analysi
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    U[Single-page UI<br/>vanilla HTML/CSS/JS] -->|multipart PDF| A[POST /api/analyze]
-    A -->|thread-offload| E[PyMuPDF<br/>text + page count]
-    E --> L[OpenAI<br/>gpt-4o-mini]
-    L -->|validated against| S[Pydantic schema]
-    S --> R[(Redis<br/>session + TTL)]
-    R -->|session_id + analysis| U
-    U -->|POST /api/chat| C[Coaching chat]
-    C --> R
-```
+<div align="center">
+  <img src="docs/architecture.svg" alt="North Star architecture — FastAPI request pipeline with a temporary Redis store and a permanent Amazon RDS PostgreSQL store" width="100%">
+</div>
 
 The flow: the browser uploads a PDF → FastAPI extracts text (offloaded to a thread so the blocking parse can't freeze the event loop) → OpenAI analyzes it → the response is **validated against a Pydantic schema** before anything trusts it → a session is stored in Redis → the structured analysis returns to the UI. Follow-up chat messages reload that session and answer grounded in the resume + analysis.
+
+Two stores with distinct jobs: **Redis is temporary** (sessions with a 1h TTL, chat history, rate-limit counters), while **Amazon RDS PostgreSQL is permanent** — every successful interaction is written to `llm_interactions` **fire-and-forget** (scheduled after the response is computed), so persistence adds no latency and a database hiccup never breaks the user's response. Telemetry fans out in parallel to SQLite (the live dashboard) and CloudWatch (EMF metrics + JSON logs), all correlated by `request_id`.
 
 The whole thing ships as **one FastAPI service**: the API lives under `/api`, and the frontend is a single self-contained `static/index.html` served by FastAPI itself — no separate frontend server, no build step.
 
@@ -343,6 +337,10 @@ North Star is **actively in development** — built in public.
 - [x] Test suite — rate-limiter + endpoint guardrail tests (pytest, fakeredis)
 - [x] Single-container Docker image
 - [x] AWS ECS Fargate deployment — live behind an Application Load Balancer
+- [x] Permanent datastore — Amazon RDS PostgreSQL (`llm_interactions`), fire-and-forget writes, Alembic migrations
+- [ ] Prompt evals & regression testing on captured interactions
+- [ ] LLM-as-judge quality scoring (`eval_runs` / `eval_results`)
+- [ ] Analytics dashboard on RDS — token/cost analytics, model comparisons, feedback analysis
 - [ ] Public live demo link
 
 ---

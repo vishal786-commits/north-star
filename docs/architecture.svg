@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 660" width="1240" height="660" role="img" aria-label="North Star architecture diagram" font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfcfe"/><stop offset="1" stop-color="#eef2f8"/></linearGradient>
+    <linearGradient id="gBrowser" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0ff"/><stop offset="1" stop-color="#e0e4fe"/></linearGradient>
+    <linearGradient id="gApi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e7fbf7"/><stop offset="1" stop-color="#d3f5ed"/></linearGradient>
+    <linearGradient id="gExtract" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6ea"/><stop offset="1" stop-color="#feeacd"/></linearGradient>
+    <linearGradient id="gOpenAI" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4eefe"/><stop offset="1" stop-color="#e9dffe"/></linearGradient>
+    <linearGradient id="gValidate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdeef6"/><stop offset="1" stop-color="#fbdcec"/></linearGradient>
+    <linearGradient id="gRedis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdece9"/><stop offset="1" stop-color="#fbd8d2"/></linearGradient>
+    <linearGradient id="gRds" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9f1ff"/><stop offset="1" stop-color="#d7e5fe"/></linearGradient>
+    <linearGradient id="gObs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eff3f9"/><stop offset="1" stop-color="#e1e8f2"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#334155" flood-opacity="0.16"/></filter>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker>
+    <marker id="arrowBlue" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#3b82f6"/></marker>
+    <marker id="arrowSky" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#0ea5e9"/></marker>
+  </defs>
+
+  <!-- canvas -->
+  <rect x="6" y="6" width="1228" height="648" rx="22" fill="url(#bg)" stroke="#d9e1ec" stroke-width="1.5"/>
+
+  <!-- header -->
+  <text x="34" y="50" font-size="24" font-weight="700" fill="#1e293b">North Star — Architecture</text>
+  <text x="34" y="76" font-size="13" fill="#64748b">Single FastAPI service · async request pipeline · Redis (temporary) + Amazon RDS PostgreSQL (permanent)</text>
+
+  <text x="34" y="120" font-size="11" font-weight="600" letter-spacing="3" fill="#94a3b8">REQUEST PIPELINE</text>
+
+  <!-- return arrow (response back to UI) -->
+  <path d="M954,130 C800,102 300,102 115,130" fill="none" stroke="#0ea5e9" stroke-width="1.4" stroke-opacity="0.6" stroke-dasharray="2 5" marker-end="url(#arrowSky)"/>
+  <text x="534" y="99" text-anchor="middle" font-size="10" fill="#0284c7">validated response → session_id + analysis</text>
+
+  <!-- pipeline arrows -->
+  <line x1="186" y1="182" x2="207" y2="182" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="426" y1="182" x2="449" y2="182" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="626" y1="182" x2="649" y2="182" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="836" y1="182" x2="859" y2="182" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Browser -->
+  <g filter="url(#shadow)"><rect x="34" y="130" width="150" height="104" rx="14" fill="url(#gBrowser)" stroke="#a5b4fc" stroke-width="1.5"/></g>
+  <text x="109" y="176" text-anchor="middle" font-size="17" font-weight="700" fill="#4338ca">Browser</text>
+  <text x="109" y="198" text-anchor="middle" font-size="11" fill="#6366f1">single-page UI</text>
+
+  <!-- FastAPI -->
+  <g filter="url(#shadow)"><rect x="214" y="130" width="210" height="104" rx="14" fill="url(#gApi)" stroke="#5eead4" stroke-width="1.5"/></g>
+  <text x="319" y="168" text-anchor="middle" font-size="17" font-weight="700" fill="#0f766e">FastAPI service</text>
+  <text x="319" y="190" text-anchor="middle" font-size="10.5" fill="#0d9488">/analyze · /fit · /chat · /feedback</text>
+  <text x="319" y="208" text-anchor="middle" font-size="9.5" fill="#14b8a6">async · request-id middleware</text>
+
+  <!-- Extract -->
+  <g filter="url(#shadow)"><rect x="454" y="130" width="172" height="104" rx="14" fill="url(#gExtract)" stroke="#fcd34d" stroke-width="1.5"/></g>
+  <text x="540" y="172" text-anchor="middle" font-size="16" font-weight="700" fill="#b45309">PyMuPDF</text>
+  <text x="540" y="194" text-anchor="middle" font-size="10" fill="#d97706">extract text · thread-offloaded</text>
+
+  <!-- OpenAI -->
+  <g filter="url(#shadow)"><rect x="654" y="130" width="182" height="104" rx="14" fill="url(#gOpenAI)" stroke="#c4b5fd" stroke-width="1.5"/></g>
+  <text x="745" y="168" text-anchor="middle" font-size="16" font-weight="700" fill="#6d28d9">OpenAI</text>
+  <text x="745" y="190" text-anchor="middle" font-size="11" fill="#7c3aed">gpt-4o-mini</text>
+  <text x="745" y="208" text-anchor="middle" font-size="9.5" fill="#8b5cf6">review · fit · chat</text>
+
+  <!-- Validate -->
+  <g filter="url(#shadow)"><rect x="864" y="130" width="182" height="104" rx="14" fill="url(#gValidate)" stroke="#f9a8d4" stroke-width="1.5"/></g>
+  <text x="955" y="172" text-anchor="middle" font-size="16" font-weight="700" fill="#be185d">Pydantic</text>
+  <text x="955" y="194" text-anchor="middle" font-size="10" fill="#db2777">schema validation · retry</text>
+
+  <text x="34" y="300" font-size="11" font-weight="600" letter-spacing="3" fill="#94a3b8">DATA AND TELEMETRY</text>
+
+  <!-- distribution bus from FastAPI -->
+  <path d="M319,236 L319,292 L894,292" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+  <line x1="319" y1="292" x2="319" y2="318" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="579" y1="292" x2="579" y2="318" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowBlue)"/>
+  <line x1="894" y1="292" x2="894" y2="318" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="589" y="311" text-anchor="start" font-size="10" fill="#2563eb">fire-and-forget</text>
+
+  <!-- Redis -->
+  <g filter="url(#shadow)"><rect x="214" y="322" width="210" height="150" rx="14" fill="url(#gRedis)" stroke="#fca5a5" stroke-width="1.5"/></g>
+  <text x="319" y="360" text-anchor="middle" font-size="17" font-weight="700" fill="#b91c1c">Redis</text>
+  <rect x="273" y="370" width="92" height="18" rx="9" fill="#ef4444" fill-opacity="0.12" stroke="#ef4444" stroke-opacity="0.4"/>
+  <text x="319" y="383" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="#b91c1c">TEMPORARY</text>
+  <text x="238" y="412" font-size="11" fill="#9f1239">· sessions — 1h TTL</text>
+  <text x="238" y="434" font-size="11" fill="#9f1239">· chat history</text>
+  <text x="238" y="456" font-size="11" fill="#9f1239">· rate-limit counters</text>
+
+  <!-- RDS PostgreSQL -->
+  <g filter="url(#shadow)"><rect x="454" y="322" width="250" height="150" rx="14" fill="url(#gRds)" stroke="#93c5fd" stroke-width="1.5"/></g>
+  <text x="579" y="356" text-anchor="middle" font-size="14.5" font-weight="700" fill="#1d4ed8">Amazon RDS PostgreSQL</text>
+  <rect x="533" y="366" width="92" height="18" rx="9" fill="#3b82f6" fill-opacity="0.12" stroke="#3b82f6" stroke-opacity="0.4"/>
+  <text x="579" y="379" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="#1d4ed8">PERMANENT</text>
+  <text x="476" y="408" font-size="11.5" font-weight="600" fill="#1e3a8a">llm_interactions</text>
+  <text x="476" y="429" font-size="10.5" fill="#2563eb">response JSON · prompt version</text>
+  <text x="476" y="450" font-size="10.5" fill="#2563eb">model · tokens · latency · rating</text>
+
+  <!-- Observability -->
+  <g filter="url(#shadow)"><rect x="734" y="322" width="320" height="150" rx="14" fill="url(#gObs)" stroke="#cbd5e1" stroke-width="1.5"/></g>
+  <text x="894" y="352" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">Observability</text>
+  <rect x="752" y="364" width="150" height="58" rx="10" fill="#ffffff" fill-opacity="0.75" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="827" y="389" text-anchor="middle" font-size="11.5" font-weight="600" fill="#334155">SQLite metrics</text>
+  <text x="827" y="407" text-anchor="middle" font-size="9.5" fill="#64748b">ephemeral · /metrics.html</text>
+  <rect x="912" y="364" width="150" height="58" rx="10" fill="#ffffff" fill-opacity="0.75" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="987" y="389" text-anchor="middle" font-size="11.5" font-weight="600" fill="#334155">CloudWatch</text>
+  <text x="987" y="407" text-anchor="middle" font-size="9.5" fill="#64748b">EMF + JSON logs</text>
+  <text x="894" y="450" text-anchor="middle" font-size="10" fill="#64748b">request_id correlates logs ↔ rows ↔ metrics</text>
+
+  <!-- legend -->
+  <line x1="40" y1="540" x2="74" y2="540" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="84" y="544" font-size="11" fill="#64748b">in-request (blocking)</text>
+  <line x1="286" y1="540" x2="320" y2="540" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowBlue)"/>
+  <text x="330" y="544" font-size="11" fill="#64748b">fire-and-forget (non-blocking)</text>
+  <rect x="600" y="532" width="14" height="14" rx="3" fill="#ef4444"/>
+  <text x="622" y="544" font-size="11" fill="#64748b">Redis · temporary</text>
+  <rect x="774" y="532" width="14" height="14" rx="3" fill="#3b82f6"/>
+  <text x="796" y="544" font-size="11" fill="#64748b">RDS · permanent</text>
+
+  <!-- footer -->
+  <text x="620" y="606" text-anchor="middle" font-size="10" fill="#94a3b8">One deployable container · AWS ECS Fargate behind an ALB · Alembic migrations run on boot · OpenAI gpt-4o-mini · PyMuPDF</text>
+</svg>
