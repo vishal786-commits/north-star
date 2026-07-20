@@ -34,17 +34,21 @@ def client(monkeypatch):
         yield c
 
 
-def test_sixth_request_across_analyze_and_fit_is_rate_limited(client):
-    # Shared daily budget of 5 across /analyze + /fit for the same IP.
-    for _ in range(3):
-        assert client.post("/api/analyze", files={"file": PDF}).status_code == 200
-    for _ in range(2):
-        r = client.post("/api/fit", files={"file": PDF},
-                        data={"job_description": "a real job"})
-        assert r.status_code == 200
+def test_request_over_shared_daily_budget_is_rate_limited(client):
+    # /analyze and /fit share one daily per-IP budget; the call past it is 429
+    # regardless of which endpoint spends the last unit. Driven off the config
+    # value so tuning the guardrail doesn't break this test.
+    limit = config.settings.daily_ip_limit
+    calls = [
+        lambda: client.post("/api/analyze", files={"file": PDF}),
+        lambda: client.post("/api/fit", files={"file": PDF},
+                            data={"job_description": "a real job"}),
+    ]
+    for i in range(limit):
+        assert calls[i % 2]().status_code == 200
 
-    # 6th call — over budget regardless of which endpoint.
-    blocked = client.post("/api/analyze", files={"file": PDF})
+    # Next call — over budget regardless of which endpoint.
+    blocked = calls[limit % 2]()
     assert blocked.status_code == 429
     assert "Daily limit" in blocked.json()["detail"]
 
