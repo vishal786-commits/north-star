@@ -17,6 +17,13 @@ client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=45)
 MODEL = "gpt-4o-mini"
 MAX_RETRIES = 1
 
+# Prompt versions — persisted with every interaction so prompt changes can be
+# A/B compared and regression-tested later. BUMP the relevant string whenever
+# you change that feature's prompt (the prompt and its version live together).
+RESUME_PROMPT_VERSION = "resume_review@2026-07-18"
+FIT_PROMPT_VERSION = "job_fit@2026-07-18"
+CHAT_PROMPT_VERSION = "chat@2026-07-18"
+
 
 def _meta(response, llm_ms: float) -> dict:
     """Pull the monitoring metadata off an OpenAI response.
